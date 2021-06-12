@@ -1,0 +1,16 @@
+{
+  "ExpandedNodes": [
+    "",
+    "\\public",
+    "\\src",
+    "\\src\\assets",
+    "\\src\\assets\\images\\token-list",
+    "\\src\\components",
+    "\\src\\components\\Confetti",
+    "\\src\\components\\Icons",
+    "\\src\\components\\ListLogo",
+    "\\src\\components\\Web3Status"
+  ],
+  "SelectedNode": "\\src\\components\\Icons\\index.tsx",
+  "PreviewInSolutionExplorer": false
+}

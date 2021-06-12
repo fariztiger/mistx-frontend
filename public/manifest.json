@@ -1,7 +1,7 @@
 {
   "background_color": "#FFBF00",
   "display": "standalone",
-  "homepage_url": "https://mistx.io",
+  "homepage_url": "https://app.jawi.club",
   "icons": [
     {
       "src": "./android-chrome-192x192.png",
@@ -17,8 +17,8 @@
     }
   ],
   "orientation": "portrait",
-  "name": "MistX",
-  "short_name": "MistX",
+  "name": "Jawi",
+  "short_name": "Jawi",
   "start_url": ".",
   "theme_color": "#FFBF00"
 }
