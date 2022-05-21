@@ -1,13 +1,19 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
 import { useActiveWeb3React } from '../../hooks'
 import { useAddPopup, useBlockNumber } from '../application/hooks'
 import { AppDispatch, AppState } from '../index'
-import { checkedTransaction, finalizeTransaction } from './actions'
+import {
+  checkedTransaction,
+  finalizeTransaction,
+  SerializableTransactionReceipt,
+  serializeLegacyTransaction
+} from './actions'
+import FATHOM_GOALS from '../../constants/fathom'
 
 export function shouldCheck(
   lastBlockNumber: number,
-  tx: { addedTime: number; receipt?: {}; lastCheckedBlockNumber?: number }
+  tx: { addedTime: number; receipt?: SerializableTransactionReceipt; lastCheckedBlockNumber?: number }
 ): boolean {
   if (tx.receipt) return false
   if (!tx.lastCheckedBlockNumber) return true
@@ -26,11 +32,22 @@ export function shouldCheck(
   }
 }
 
+function isLegacyTransaction(transaction: any): boolean {
+  if (
+    transaction.processed &&
+    !transaction.processed.id &&
+    (transaction.processed.serializedSwap || transaction.processed.serialized)
+  )
+    return true
+  return false
+}
+
 export default function Updater(): null {
   const { chainId, library } = useActiveWeb3React()
 
   const lastBlockNumber = useBlockNumber()
 
+  const [checkedForLegacyTransactions, setCheckedForLegacyTransactions] = useState<boolean>(false)
   const dispatch = useDispatch<AppDispatch>()
   const state = useSelector<AppState, AppState['transactions']>(state => state.transactions)
 
@@ -40,6 +57,20 @@ export default function Updater(): null {
 
   // show popup on confirm
   const addPopup = useAddPopup()
+
+  // Serialize legacy transactions to new format once
+  useEffect(() => {
+    if (!checkedForLegacyTransactions && Object.keys(transactions).length) {
+      Object.keys(transactions).forEach(key => {
+        const transaction = transactions[key]
+        if (isLegacyTransaction(transaction)) {
+          dispatch(serializeLegacyTransaction({ legacyTransaction: transaction }))
+        }
+      })
+      setCheckedForLegacyTransactions(true)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transactions])
 
   useEffect(() => {
     if (!chainId || !library || !lastBlockNumber) return
@@ -51,7 +82,6 @@ export default function Updater(): null {
           .getTransactionReceipt(hash)
           .then(receipt => {
             if (receipt) {
-              // console.log('has receipt', receipt)
               dispatch(
                 finalizeTransaction({
                   chainId,
@@ -68,6 +98,22 @@ export default function Updater(): null {
                   }
                 })
               )
+              if (
+                transactions[hash] &&
+                transactions[hash].inputAmount?.currency.symbol === 'ETH' &&
+                transactions[hash].outputAmount?.currency.symbol === 'WETH' &&
+                window.fathom
+              ) {
+                window.fathom.trackGoal(FATHOM_GOALS.WRAP_COMPLETE, 0)
+              }
+              if (
+                transactions[hash] &&
+                transactions[hash].inputAmount?.currency.symbol === 'WETH' &&
+                transactions[hash].outputAmount?.currency.symbol === 'ETH' &&
+                window.fathom
+              ) {
+                window.fathom.trackGoal(FATHOM_GOALS.UNWRAP_COMPLETE, 0)
+              }
             } else {
               dispatch(checkedTransaction({ chainId, hash, blockNumber: lastBlockNumber }))
             }

@@ -1,4 +1,3 @@
-import { AbstractConnector } from '@web3-react/abstract-connector'
 import { UnsupportedChainIdError, useWeb3React } from '@web3-react/core'
 import { darken } from 'polished'
 import React, { useMemo } from 'react'
@@ -7,14 +6,13 @@ import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
 import { NetworkContextName } from '../../constants'
 import useENSName from '../../hooks/useENSName'
-import { useHasSocks } from '../../hooks/useSocksBalance'
 import { useWalletModalToggle } from '../../state/application/hooks'
 import { useDarkModeManager } from '../../state/user/hooks'
 import { isPendingTransaction, isTransactionRecent, useAllTransactions } from '../../state/transactions/hooks'
 import { TransactionDetails } from '../../state/transactions/reducer'
 import { shortenAddress } from '../../utils'
 import { ButtonSecondary } from '../Button'
-import { PowerIcon, ConnectIcon } from '../Icons'
+import { ConnectIcon } from '../Icons'
 import { colors as ThemeColors } from '../../theme'
 import Loader from '../Loader'
 import { RowBetween } from '../Row'
@@ -88,7 +86,7 @@ const Text = styled.p`
   margin: 0 0.5rem 0 0.25rem;
   font-size: 1rem;
   width: fit-content;
-  font-weight: 700;
+  font-weight: 600;
 `
 
 const NetworkIcon = styled(Activity)`
@@ -98,9 +96,9 @@ const NetworkIcon = styled(Activity)`
   height: 16px;
 `
 
-const StyledPowerIcon = styled(PowerIcon)`
-  margin-left: 0.5rem;
-`
+// const StyledPowerIcon = styled(PowerIcon)`
+//   margin-left: 0.5rem;
+// `
 
 const StyledConnectIconWrapper = styled.div`
   position: relative;
@@ -116,22 +114,16 @@ function newTransactionsFirst(a: TransactionDetails, b: TransactionDetails) {
   return b.addedTime - a.addedTime
 }
 
-const SOCK = (
-  <span role="img" aria-label="has socks emoji" style={{ marginTop: -4, marginBottom: -4 }}>
-    🧦
-  </span>
-)
-
 // eslint-disable-next-line react/prop-types
-function StatusIcon({ connector }: { connector: AbstractConnector }) {
-  if (!connector) return null
-  return <StyledPowerIcon fill="#292624" />
-}
+// function StatusIcon({ connector }: { connector: AbstractConnector }) {
+//   if (!connector) return null
+//   return <StyledPowerIcon fill="#292624" />
+// }
 
 function Web3StatusInner() {
   const { t } = useTranslation()
   const [darkMode] = useDarkModeManager()
-  const { account, connector, error } = useWeb3React()
+  const { account, error } = useWeb3React()
 
   const colors = ThemeColors(darkMode)
 
@@ -147,7 +139,6 @@ function Web3StatusInner() {
   const pending = sortedRecentTransactions.filter(tx => isPendingTransaction(tx)).map(tx => tx.hash)
 
   const hasPendingTransactions = !!pending.length
-  const hasSocks = useHasSocks()
   const toggleWalletModal = useWalletModalToggle()
 
   if (account) {
@@ -159,11 +150,10 @@ function Web3StatusInner() {
           </RowBetween>
         ) : (
           <>
-            {hasSocks ? SOCK : null}
             <Text>{ENSName || shortenAddress(account, 3)}</Text>
           </>
         )}
-        {!hasPendingTransactions && connector && <StatusIcon connector={connector} />}
+        {/* {!hasPendingTransactions && connector && <StatusIcon connector={connector} />} */}
       </Web3StatusConnected>
     )
   } else if (error) {

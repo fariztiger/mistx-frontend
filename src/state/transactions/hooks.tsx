@@ -1,15 +1,14 @@
 import { useCallback, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
-
-import { ChainId, CurrencyAmount, Trade } from '@alchemistcoin/sdk'
+import { ChainId, CurrencyAmount, Trade, Currency, TradeType } from '@alchemist-coin/mistx-core'
+import { BundleProcessed, Status } from '@alchemist-coin/mistx-connect'
 import { useActiveWeb3React } from '../../hooks'
 import { AppDispatch, AppState } from '../index'
 import { addTransaction, removeTransaction, updateTransaction } from './actions'
 import { TransactionDetails } from './reducer'
-import { useAddPopup } from 'state/application/hooks'
-import { Diagnosis, emitTransactionCancellation, Status, TransactionProcessed } from 'websocket'
-import { WrapType } from 'hooks/useWrapCallback'
-
+import { useAddPopup } from '../application/hooks'
+import { Diagnosis, emitTransactionCancellation } from '../../websocket'
+import { WrapType } from '../../hooks/useWrapCallback'
 interface TransactionResponseIdentifier {
   chainId: ChainId
   hash: string
@@ -26,10 +25,10 @@ interface TransactionResponseUnsentData {
   claim?: {
     recipient: string
   }
-  trade?: Trade
+  trade?: Trade<Currency, Currency, TradeType>
   wrapType?: WrapType
-  inputAmount?: CurrencyAmount
-  outputAmount?: CurrencyAmount
+  inputAmount?: CurrencyAmount<Currency>
+  outputAmount?: CurrencyAmount<Currency>
 }
 
 // helper that can take a ethers library transaction response and add it to the list of transactions
@@ -47,6 +46,7 @@ export function useTransactionAdder(): (
       {
         summary,
         claim,
+        deadline,
         trade,
         inputAmount,
         outputAmount,
@@ -55,9 +55,10 @@ export function useTransactionAdder(): (
         summary?: string
         claim?: { recipient: string }
         approval?: { tokenAddress: string; spender: string }
-        trade?: Trade
-        inputAmount?: CurrencyAmount
-        outputAmount?: CurrencyAmount
+        deadline?: number
+        trade?: Trade<Currency, Currency, TradeType>
+        inputAmount?: CurrencyAmount<Currency>
+        outputAmount?: CurrencyAmount<Currency>
         wrapType?: WrapType
       } = {}
     ) => {
@@ -78,7 +79,8 @@ export function useTransactionAdder(): (
           trade,
           inputAmount,
           outputAmount,
-          wrapType
+          wrapType,
+          deadline
         })
       )
       addPopup(
@@ -87,7 +89,8 @@ export function useTransactionAdder(): (
             hash,
             pending: true,
             success: false,
-            summary
+            summary,
+            message: 'Transaction Submitted'
           }
         },
         hash,
@@ -101,8 +104,8 @@ export function useTransactionAdder(): (
 export function useTransactionUpdater(): (
   response: TransactionResponseIdentifier,
   customData?: {
-    transaction?: TransactionProcessed
-    status?: Status
+    bundle?: BundleProcessed
+    status?: Status | string
     message?: string
     blockNumber?: number
     flashbotsResolution?: string
@@ -116,7 +119,7 @@ export function useTransactionUpdater(): (
     async (
       response: TransactionResponseIdentifier,
       {
-        transaction,
+        bundle,
         message,
         status,
         blockNumber,
@@ -124,9 +127,9 @@ export function useTransactionUpdater(): (
         mistxDiagnosis,
         updatedAt
       }: {
-        transaction?: TransactionProcessed
+        bundle?: BundleProcessed
         message?: string
-        status?: Status
+        status?: Status | string
         blockNumber?: number
         flashbotsResolution?: string
         mistxDiagnosis?: Diagnosis
@@ -139,13 +142,13 @@ export function useTransactionUpdater(): (
           updateTransaction({
             hash: response.hash,
             chainId: response.chainId,
-            transaction,
+            bundle,
             cancel: status,
             status:
-              status === Status.CANCEL_TRANSACTION_SUCCESSFUL
-                ? Status.FAILED_TRANSACTION
+              status === Status.CANCEL_BUNDLE_SUCCESSFUL
+                ? Status.FAILED_BUNDLE
                 : message?.includes('already completed') // TO DO - lets not rely on text from the backend
-                ? Status.SUCCESSFUL_TRANSACTION
+                ? Status.SUCCESSFUL_BUNDLE
                 : undefined,
             message,
             updatedAt
@@ -157,7 +160,7 @@ export function useTransactionUpdater(): (
           updateTransaction({
             hash: response.hash,
             chainId: response.chainId,
-            transaction,
+            bundle,
             status,
             message,
             blockNumber,
@@ -178,17 +181,17 @@ export function useTransactionCanceller() {
     async (
       response: TransactionResponseIdentifier,
       {
-        transaction,
+        bundle,
         message,
         status
       }: {
-        transaction: TransactionProcessed
+        bundle: BundleProcessed
         message?: string
         status?: string
       }
     ) => {
       if (!account) return
-      emitTransactionCancellation(transaction)
+      emitTransactionCancellation(bundle.id)
     },
     [account]
   )
@@ -215,7 +218,6 @@ export function useAllTransactions(): { [txHash: string]: TransactionDetails } {
   const { chainId } = useActiveWeb3React()
 
   const state = useSelector<AppState, AppState['transactions']>(state => state.transactions)
-  // console.log('- log chainId', chainId)
   return chainId ? state[chainId] ?? {} : {}
 }
 
@@ -227,13 +229,37 @@ export function useIsTransactionPending(transactionHash?: string): boolean {
   const transaction = transactions[transactionHash]
 
   return (
-    transaction.status === Status.PENDING_TRANSACTION ||
-    (typeof transaction.status === 'undefined' && !transaction.receipt)
+    transaction.status === Status.PENDING_BUNDLE || (typeof transaction.status === 'undefined' && !transaction.receipt)
+  )
+}
+
+export function useGetBundleByID() {
+  const transactions = useAllTransactions()
+
+  return useCallback(
+    (id: string) => {
+      return Object.values(transactions).find((transaction: TransactionDetails) => {
+        return transaction.processed?.id === id
+      })
+    },
+    [transactions]
   )
 }
 
 export function isPendingTransaction(tx: TransactionDetails): boolean {
-  return !!(tx.status !== Status.FAILED_TRANSACTION && tx.status !== Status.SUCCESSFUL_TRANSACTION && !tx.receipt)
+  if (tx.receipt) return false // If there is a receipt, we know the transaction has completed
+  if (!tx.receipt && !!tx.wrapType) return true // if transaction is a wrap, ignore the tx.status and return true since receipt is required to be true
+  if (tx.status === Status.PENDING_BUNDLE) return true // if Status set to pending, return true
+  // check if status is included in Enum, for legacy transactions
+  if (Object.values<string>(Status).includes(tx.status || '')) {
+    return !!(
+      tx.status !== Status.FAILED_BUNDLE &&
+      tx.status !== Status.SUCCESSFUL_BUNDLE &&
+      tx.status !== Status.BUNDLE_NOT_FOUND
+    )
+  }
+
+  return false
 }
 
 export function usePendingTransactions(): { [txHash: string]: TransactionDetails } {
@@ -265,7 +291,7 @@ export function useHasPendingTransactions(): boolean {
 }
 
 export function isSuccessfulTransaction(tx: TransactionDetails): boolean {
-  return !!(tx.status === Status.SUCCESSFUL_TRANSACTION || tx.receipt?.status === 1)
+  return !!(tx.status === Status.SUCCESSFUL_BUNDLE || tx.receipt?.status === 1)
 }
 
 /**

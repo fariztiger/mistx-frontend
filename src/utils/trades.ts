@@ -1,10 +1,10 @@
 import { ZERO_PERCENT, ONE_HUNDRED_PERCENT } from './../constants/index'
-import { Trade, Percent, currencyEquals, ETHER, WETH } from '@alchemistcoin/sdk'
+import { Trade, Percent, currencyEquals, Currency, TradeType } from '@alchemist-coin/mistx-core'
 
 // returns whether tradeB is better than tradeA by at least a threshold percentage amount
 export function isTradeBetter(
-  tradeA: Trade | undefined | null,
-  tradeB: Trade | undefined | null,
+  tradeA: Trade<Currency, Currency, TradeType> | undefined,
+  tradeB: Trade<Currency, Currency, TradeType> | undefined,
   minimumDelta: Percent = ZERO_PERCENT
 ): boolean | undefined {
   if (tradeA && !tradeB) return false
@@ -22,21 +22,38 @@ export function isTradeBetter(
   if (minimumDelta.equalTo(ZERO_PERCENT)) {
     return tradeA.executionPrice.lessThan(tradeB.executionPrice)
   } else {
-    return tradeA.executionPrice.raw.multiply(minimumDelta.add(ONE_HUNDRED_PERCENT)).lessThan(tradeB.executionPrice)
+    return tradeA.executionPrice.asFraction
+      .multiply(minimumDelta.add(ONE_HUNDRED_PERCENT))
+      .lessThan(tradeB.executionPrice)
   }
 }
 
 //returns whether the given trade involves ETH as a Pair
-export function isETHTrade(trade: Trade | undefined | null): boolean | undefined {
+export function isETHTrade(trade: Trade<Currency, Currency, TradeType> | undefined): boolean | undefined {
   if (!trade) {
     return undefined
-  } else if (
-    !currencyEquals(trade.route.input, ETHER) &&
-    !currencyEquals(trade.route.input, WETH[trade.route.chainId]) &&
-    !currencyEquals(trade.route.output, ETHER) &&
-    !currencyEquals(trade.route.output, WETH[trade.route.chainId])
-  ) {
+  } else if (!trade.route.input.isNative && !trade.route.output.isNative) {
     return false
   }
   return true
+}
+
+//returns whether the given trade involves ETH as a Pair
+export function isETHInTrade(trade: Trade<Currency, Currency, TradeType> | undefined): boolean | undefined {
+  if (!trade) {
+    return undefined
+  } else if (trade.route.input.isNative) {
+    return true
+  }
+  return false
+}
+
+//returns whether the given trade involves ETH as a Pair
+export function isETHOutTrade(trade: Trade<Currency, Currency, TradeType> | undefined): boolean | undefined {
+  if (!trade) {
+    return undefined
+  } else if (trade.route.output.isNative) {
+    return true
+  }
+  return false
 }

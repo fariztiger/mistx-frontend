@@ -4,33 +4,24 @@ import { TYPE } from '../../theme'
 import { useSocketStatus } from 'state/application/hooks'
 
 const StyledPolling = styled.div<{ connected: boolean }>`
-  position: fixed;
-  display: flex;
-  right: 0;
-  bottom: 0;
-  padding: 1rem;
-  color: white;
-  transition: opacity 0.25s ease;
   color: ${({ theme, connected }) => (connected ? theme.green1 : theme.red3)};
+  display: flex;
+  transition: opacity 0.25s ease;
 
   :hover {
     opacity: 1;
   }
-
-  ${({ theme }) => theme.mediaWidth.upToMedium`
-    bottom: 100px;
-  `}
 `
 const StyledPollingDot = styled.div<{ connected: boolean }>`
-  width: 8px;
+  background-color: ${({ theme, connected }) => (connected ? theme.green1 : theme.red3)};
+  border-radius: 50%;
   height: 8px;
-  min-height: 8px;
-  min-width: 8px;
   margin-left: 0.5rem;
   margin-top: 3px;
-  border-radius: 50%;
+  min-height: 8px;
+  min-width: 8px;
   position: relative;
-  background-color: ${({ theme, connected }) => (connected ? theme.green1 : theme.red3)};
+  width: 8px;
 `
 
 const rotate360 = keyframes`

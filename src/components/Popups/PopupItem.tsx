@@ -7,6 +7,7 @@ import { PopupContent } from '../../state/application/actions'
 import { useRemovePopup } from '../../state/application/hooks'
 import ListUpdatePopup from './ListUpdatePopup'
 import TransactionPopup from './TransactionPopup'
+import ContentPopup from './ContentPopup'
 
 export const StyledClose = styled(X)`
   position: absolute;
@@ -26,7 +27,6 @@ export const Popup = styled.div`
   border-radius: 10px;
   padding: 20px;
   padding-right: 35px;
-  overflow: hidden;
 
   ${({ theme }) => theme.mediaWidth.upToSmall`
     min-width: 290px;
@@ -91,6 +91,8 @@ export default function PopupItem({
       listUpdate: { listUrl, oldList, newList, auto }
     } = content
     popupContent = <ListUpdatePopup popKey={popKey} listUrl={listUrl} oldList={oldList} newList={newList} auto={auto} />
+  } else if ('message' in content) {
+    popupContent = <ContentPopup message={content.message} />
   }
 
   const faderStyle = useSpring({

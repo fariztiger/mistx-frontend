@@ -1,38 +1,42 @@
 import { createReducer, nanoid } from '@reduxjs/toolkit'
+import { Fees } from '@alchemist-coin/mistx-connect'
 import {
   addPopup,
   PopupContent,
   removePopup,
   updateBlockNumber,
-  updateGas,
+  updateFees,
   ApplicationModal,
   setOpenModal,
-  updateSocketStatus
+  updateSocketStatus,
+  updateNewAppVersionAvailable,
+  toggleSideBar,
+  setGasLimitForPath
 } from './actions'
 
 type PopupList = Array<{ key: string; show: boolean; content: PopupContent; removeAfterMs: number | null }>
-
-export interface Gas {
-  readonly rapid: string
-  readonly fast: string
-  readonly slow: string
-  readonly standard: string
-  readonly timestamp: number
-}
 export interface ApplicationState {
   readonly blockNumber: { readonly [chainId: number]: number }
   readonly popupList: PopupList
   readonly openModal: ApplicationModal | null
-  readonly gas: Gas | undefined
+  readonly fees: Fees | undefined
   readonly socketStatus: boolean
+  readonly newAppVersionAvailable: boolean
+  readonly sideBarOpen: boolean
+  readonly gasLimits: {
+    [path: string]: number
+  }
 }
 
 const initialState: ApplicationState = {
   blockNumber: {},
   popupList: [],
   openModal: null,
-  gas: undefined,
-  socketStatus: true
+  fees: undefined,
+  socketStatus: true,
+  newAppVersionAvailable: false,
+  sideBarOpen: false,
+  gasLimits: {}
 }
 
 export default createReducer(initialState, builder =>
@@ -45,9 +49,9 @@ export default createReducer(initialState, builder =>
         state.blockNumber[chainId] = Math.max(blockNumber, state.blockNumber[chainId])
       }
     })
-    .addCase(updateGas, (state, action) => {
-      const gas = action.payload
-      state.gas = gas
+    .addCase(updateFees, (state, action) => {
+      const fees = action.payload
+      state.fees = fees
     })
     .addCase(setOpenModal, (state, action) => {
       state.openModal = action.payload
@@ -71,5 +75,14 @@ export default createReducer(initialState, builder =>
     })
     .addCase(updateSocketStatus, (state, action) => {
       state.socketStatus = action.payload
+    })
+    .addCase(updateNewAppVersionAvailable, (state, action) => {
+      state.newAppVersionAvailable = action.payload
+    })
+    .addCase(toggleSideBar, state => {
+      state.sideBarOpen = !state.sideBarOpen
+    })
+    .addCase(setGasLimitForPath, (state, { payload }) => {
+      state.gasLimits[payload.path] = payload.gasLimit
     })
 )

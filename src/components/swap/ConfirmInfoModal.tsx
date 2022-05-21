@@ -1,4 +1,4 @@
-import { Trade } from '@alchemistcoin/sdk'
+import { Trade, Currency, TradeType } from '@alchemist-coin/mistx-core'
 import React from 'react'
 import TransactionInformationModal from '../TransactionInformationModal'
 import ConfirmationPendingContent from './ConfirmationPendingContent'
@@ -7,15 +7,13 @@ import Modal from '../Modal'
 export default function ConfirmSwapModal({
   onConfirm,
   onDismiss,
-  isOpen,
   attemptingTxn,
   trade
 }: {
-  isOpen: boolean
   onConfirm: () => void
   onDismiss: () => void
   attemptingTxn: boolean
-  trade: Trade | undefined
+  trade: Trade<Currency, Currency, TradeType> | undefined
 }) {
   // text to show while loading
   const pendingText = `Swapping ${trade?.inputAmount?.toSignificant(6)} ${
@@ -23,7 +21,7 @@ export default function ConfirmSwapModal({
   } for ${trade?.outputAmount?.toSignificant(6)} ${trade?.outputAmount?.currency?.symbol}`
 
   return (
-    <Modal isOpen={isOpen} onDismiss={onDismiss}>
+    <Modal isOpen={true} onDismiss={onDismiss}>
       {attemptingTxn ? (
         <ConfirmationPendingContent onDismiss={onDismiss} pendingText={pendingText} />
       ) : (

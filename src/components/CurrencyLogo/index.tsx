@@ -1,4 +1,4 @@
-import { Currency, ETHER, Token, ChainId } from '@alchemistcoin/sdk'
+import { Currency, Token, ChainId } from '@alchemist-coin/mistx-core'
 import React, { useMemo } from 'react'
 import styled from 'styled-components'
 
@@ -14,13 +14,11 @@ const StyledEthereumLogo = styled.img<{ size: string }>`
   width: ${({ size }) => size};
   height: ${({ size }) => size};
   box-shadow: 0px 6px 10px rgba(0, 0, 0, 0.075);
-  border-radius: 24px;
 `
 
 const StyledLogo = styled(Logo)<{ size: string }>`
   width: ${({ size }) => size};
   height: ${({ size }) => size};
-  border-radius: ${({ size }) => size};
   box-shadow: 0px 6px 10px rgba(0, 0, 0, 0.075);
 `
 
@@ -36,7 +34,7 @@ export default function CurrencyLogo({
   const uriLocations = useHttpLocations(currency instanceof WrappedTokenInfo ? currency.logoURI : undefined)
 
   const srcs: string[] = useMemo(() => {
-    if (!currency || currency === ETHER) return []
+    if (!currency || currency.isNative) return []
 
     if (currency instanceof Token) {
       const defaultUrls = currency.chainId === ChainId.MAINNET ? [getTokenLogoURL(currency.address)] : []
@@ -48,7 +46,7 @@ export default function CurrencyLogo({
     return []
   }, [currency, uriLocations])
 
-  if (currency === ETHER) {
+  if (currency?.isNative) {
     return <StyledEthereumLogo src={EthereumLogo} size={size} style={style} />
   }
 

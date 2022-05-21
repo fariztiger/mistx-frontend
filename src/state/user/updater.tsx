@@ -1,11 +1,52 @@
-import { useEffect } from 'react'
-import { useDispatch } from 'react-redux'
-import { AppDispatch } from '../index'
-import { updateMatchesDarkMode } from './actions'
+import { useEffect, useState } from 'react'
+import { useDispatch, useSelector } from 'react-redux'
+import { AppDispatch, AppState } from '../index'
+import { tipSettingToValue } from './reducer'
+import { DEFAULT_DEADLINE_FROM_NOW, INITIAL_ALLOWED_SLIPPAGE } from '../../constants'
+import {
+  updateMatchesDarkMode,
+  updateUserBribeMargin,
+  updateUserDeadline,
+  updateUserSlippageTolerance
+} from './actions'
 
 export default function Updater(): null {
   const dispatch = useDispatch<AppDispatch>()
-
+  const state = useSelector<AppState, AppState['user']>(state => state.user)
+  const [updatedDefaultUserSettings, setUpdatedDefaultUserSettings] = useState<boolean>(false)
+  useEffect(() => {
+    if (updatedDefaultUserSettings) return
+    if (state) {
+      // make sure users tip margin is aligned with the default setting
+      // the users tip setting needs to be updated if the default settings change
+      let newBribeMargin
+      const low = tipSettingToValue(1)
+      const med = tipSettingToValue(2)
+      const high = tipSettingToValue(3)
+      const highest = tipSettingToValue(4)
+      if (
+        state.userBribeMargin !== low &&
+        state.userBribeMargin !== med &&
+        state.userBribeMargin !== high &&
+        state.userBribeMargin !== highest
+      ) {
+        newBribeMargin = med
+      }
+      if (newBribeMargin && newBribeMargin !== state.userBribeMargin) {
+        dispatch(updateUserBribeMargin({ userBribeMargin: newBribeMargin }))
+      }
+      const oldDefaultUserDeadline = 60 * 5 // 5 minutes
+      if (state.userDeadline === oldDefaultUserDeadline) {
+        dispatch(updateUserDeadline({ userDeadline: DEFAULT_DEADLINE_FROM_NOW }))
+      }
+      const oldDefaultUserSlippage = 100 // 1 bips (1%)
+      if (state.userSlippageTolerance === oldDefaultUserSlippage) {
+        dispatch(updateUserSlippageTolerance({ userSlippageTolerance: INITIAL_ALLOWED_SLIPPAGE }))
+      }
+    }
+    setUpdatedDefaultUserSettings(true)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state])
   // keep dark mode in sync with the system
   useEffect(() => {
     const darkHandler = (match: MediaQueryListEvent) => {

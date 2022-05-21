@@ -1,9 +1,9 @@
 import { AbstractConnector } from '@web3-react/abstract-connector'
 import { UnsupportedChainIdError, useWeb3React } from '@web3-react/core'
 import { WalletConnectConnector } from '@web3-react/walletconnect-connector'
+import { LedgerConnector } from '@web3-react/ledger-connector'
 import React, { useEffect, useState } from 'react'
 import { isMobile } from 'react-device-detect'
-import ReactGA from 'react-ga'
 import styled from 'styled-components'
 import MetamaskIcon from '../../assets/images/metamask.png'
 import { ReactComponent as Close } from '../../assets/images/x.svg'
@@ -15,6 +15,10 @@ import { ApplicationModal } from '../../state/application/actions'
 import { useModalOpen, useWalletModalToggle } from '../../state/application/hooks'
 import { ExternalLink } from '../../theme'
 import AccountDetails from '../AccountDetails'
+import LedgerInstructions from './LedgerInstructions'
+import LedgerAccounts from './LedgerAccounts'
+import LedgerDerivationPath from './LedgerDerivationPath'
+import fathomConnectionEvent from './fathomConnectionEvent'
 
 import Modal from '../Modal'
 import Option from './Option'
@@ -113,6 +117,9 @@ const WALLET_VIEWS = {
   OPTIONS: 'options',
   OPTIONS_SECONDARY: 'options_secondary',
   ACCOUNT: 'account',
+  LEDGER: 'ledger',
+  LEDGER_ACCOUNTS: 'ledger_accounts',
+  LEDGER_DERIVATION_PATH: 'ledger_derivation_path',
   PENDING: 'pending'
 }
 
@@ -141,10 +148,13 @@ export default function WalletModal({
 
   // close on connection, when logged out before
   useEffect(() => {
-    if (account && !previousAccount && walletModalOpen) {
+    if (account && !previousAccount && walletModalOpen && connector !== SUPPORTED_WALLETS.LEDGER.connector) {
       toggleWalletModal()
     }
-  }, [account, previousAccount, toggleWalletModal, walletModalOpen])
+    if (account && !previousAccount && walletModalOpen && connector === SUPPORTED_WALLETS.LEDGER.connector) {
+      setWalletView(WALLET_VIEWS.LEDGER_DERIVATION_PATH)
+    }
+  }, [account, previousAccount, toggleWalletModal, walletModalOpen, connector])
 
   // always reset to account view
   useEffect(() => {
@@ -159,40 +169,43 @@ export default function WalletModal({
   const connectorPrevious = usePrevious(connector)
   useEffect(() => {
     if (walletModalOpen && ((active && !activePrevious) || (connector && connector !== connectorPrevious && !error))) {
-      setWalletView(WALLET_VIEWS.ACCOUNT)
+      if (connector === SUPPORTED_WALLETS.LEDGER.connector) {
+        setWalletView(WALLET_VIEWS.LEDGER_DERIVATION_PATH)
+      } else {
+        setWalletView(WALLET_VIEWS.ACCOUNT)
+      }
     }
   }, [setWalletView, active, error, connector, walletModalOpen, activePrevious, connectorPrevious])
 
-  const tryActivation = async (connector: AbstractConnector | undefined) => {
-    let name = ''
-    Object.keys(SUPPORTED_WALLETS).map(key => {
-      if (connector === SUPPORTED_WALLETS[key].connector) {
-        return (name = SUPPORTED_WALLETS[key].name)
+  async function submitActivate(connector: AbstractConnector) {
+    try {
+      await activate(connector, undefined, true)
+      fathomConnectionEvent(connector)
+    } catch (error) {
+      // console.log('wallet connection error', error)
+      if (error instanceof UnsupportedChainIdError) {
+        activate(connector) // a little janky...can't use setError because the connector isn't set
+      } else {
+        setPendingError(true)
       }
-      return true
-    })
-    // log selected wallet
-    ReactGA.event({
-      category: 'Wallet',
-      action: 'Change Wallet',
-      label: name
-    })
-    setPendingWallet(connector) // set wallet for pending view
-    setWalletView(WALLET_VIEWS.PENDING)
-
-    // if the connector is walletconnect and the user has already tried to connect, manually reset the connector
-    if (connector instanceof WalletConnectConnector && connector.walletConnectProvider?.wc?.uri) {
-      connector.walletConnectProvider = undefined
     }
+  }
 
-    connector &&
-      activate(connector, undefined, true).catch(error => {
-        if (error instanceof UnsupportedChainIdError) {
-          activate(connector) // a little janky...can't use setError because the connector isn't set
-        } else {
-          setPendingError(true)
-        }
-      })
+  function activateIntent(connector: AbstractConnector | undefined) {
+    if (!connector) return
+    if (walletView !== WALLET_VIEWS.LEDGER && connector === SUPPORTED_WALLETS.LEDGER.connector) {
+      setWalletView(WALLET_VIEWS.LEDGER)
+    } else {
+      setPendingWallet(connector) // set wallet for pending view
+      setWalletView(WALLET_VIEWS.PENDING)
+
+      // if the connector is walletconnect and the user has already tried to connect, manually reset the connector
+      if (connector instanceof WalletConnectConnector && connector.walletConnectProvider?.wc?.uri) {
+        connector.walletConnectProvider = undefined
+      }
+
+      submitActivate(connector)
+    }
   }
 
   // close wallet modal if fortmatic modal is active
@@ -218,7 +231,9 @@ export default function WalletModal({
           return (
             <Option
               onClick={() => {
-                option.connector !== connector && !option.href && tryActivation(option.connector)
+                if (option.connector !== connector && !option.href) {
+                  activateIntent(option.connector)
+                }
               }}
               id={`connect-${key}`}
               key={key}
@@ -273,7 +288,7 @@ export default function WalletModal({
             onClick={() => {
               option.connector === connector
                 ? setWalletView(WALLET_VIEWS.ACCOUNT)
-                : !option.href && tryActivation(option.connector)
+                : !option.href && activateIntent(option.connector)
             }}
             key={key}
             active={option.connector === connector}
@@ -310,13 +325,89 @@ export default function WalletModal({
       return (
         <AccountDetails
           toggleWalletModal={toggleWalletModal}
-          pendingTransactions={pendingTransactions}
-          confirmedTransactions={confirmedTransactions}
           ENSName={ENSName}
           openOptions={() => setWalletView(WALLET_VIEWS.OPTIONS)}
         />
       )
     }
+
+    if (walletView === WALLET_VIEWS.LEDGER) {
+      return (
+        <>
+          <CloseIcon onClick={toggleWalletModal}>
+            <CloseColor />
+          </CloseIcon>
+          <HeaderRow color="blue">
+            <HoverText
+              onClick={() => {
+                setPendingError(false)
+                setWalletView(WALLET_VIEWS.ACCOUNT)
+              }}
+            >
+              Back
+            </HoverText>
+          </HeaderRow>
+          <LedgerInstructions
+            onSubmit={() => {
+              activateIntent(SUPPORTED_WALLETS.LEDGER.connector)
+            }}
+          />
+        </>
+      )
+    }
+
+    if (walletView === WALLET_VIEWS.LEDGER_DERIVATION_PATH) {
+      return (
+        <>
+          <CloseIcon onClick={toggleWalletModal}>
+            <CloseColor />
+          </CloseIcon>
+          <HeaderRow color="blue">
+            <HoverText
+              onClick={() => {
+                setPendingError(false)
+                setWalletView(WALLET_VIEWS.ACCOUNT)
+              }}
+            >
+              Back
+            </HoverText>
+          </HeaderRow>
+          <LedgerDerivationPath
+            onSubmit={() => {
+              setWalletView(WALLET_VIEWS.LEDGER_ACCOUNTS)
+            }}
+            connector={SUPPORTED_WALLETS.LEDGER.connector as LedgerConnector}
+          />
+        </>
+      )
+    }
+
+    if (walletView === WALLET_VIEWS.LEDGER_ACCOUNTS) {
+      return (
+        <>
+          <CloseIcon onClick={toggleWalletModal}>
+            <CloseColor />
+          </CloseIcon>
+          <HeaderRow color="blue">
+            <HoverText
+              onClick={() => {
+                setPendingError(false)
+                setWalletView(WALLET_VIEWS.LEDGER_DERIVATION_PATH)
+              }}
+            >
+              Back
+            </HoverText>
+          </HeaderRow>
+          <LedgerAccounts
+            onSubmit={() => {
+              toggleWalletModal()
+            }}
+            connector={SUPPORTED_WALLETS.LEDGER.connector as LedgerConnector}
+          />
+        </>
+      )
+    }
+
     return (
       <UpperSection>
         <CloseIcon onClick={toggleWalletModal}>
@@ -344,7 +435,7 @@ export default function WalletModal({
               connector={pendingWallet}
               error={pendingError}
               setPendingError={setPendingError}
-              tryActivation={tryActivation}
+              tryActivation={activateIntent}
             />
           ) : (
             <OptionGrid>{getOptions()}</OptionGrid>

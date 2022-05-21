@@ -1,10 +1,8 @@
-import { ChainId } from '@alchemistcoin/sdk'
+import { ChainId } from '@alchemist-coin/mistx-core'
 import React from 'react'
 import styled from 'styled-components'
-// import { rem } from 'polished'
 import { useActiveWeb3React } from '../../hooks'
 import { YellowCard } from '../Card'
-import Menu from '../Menu'
 import Web3Status from '../Web3Status'
 
 const HeaderFrame = styled.div`
@@ -15,13 +13,14 @@ const HeaderFrame = styled.div`
   z-index: 2;
   ${({ theme }) => theme.mediaWidth.upToMedium`
     grid-template-columns: 1fr;
-    padding: 0 1rem;
-    width: calc(100%);
+    padding: 0;
+    width: 0;
     position: relative;
   `};
 
   ${({ theme }) => theme.mediaWidth.upToExtraSmall`
-        padding: 0.5rem 1rem;
+    padding: 0;
+    width: 0;
   `}
 `
 
@@ -60,25 +59,6 @@ const HeaderElement = styled.div`
    flex-direction: row-reverse;
     align-items: center;
   `};
-`
-
-const HeaderElementWrap = styled.div`
-  display: flex;
-  align-items: center;
-`
-
-const AccountElement = styled.div<{ active: boolean }>`
-  display: flex;
-  flex-direction: row;
-  align-items: center;
-  border-radius: 12px;
-  white-space: nowrap;
-  width: 100%;
-  cursor: pointer;
-
-  :focus {
-    border: 1px solid blue;
-  }
 `
 
 const HideSmall = styled.span`
@@ -129,7 +109,8 @@ export const StyledMenuButton = styled.button`
   }
 `
 
-const NETWORK_LABELS: { [chainId in ChainId]?: string } = {
+export const NETWORK_LABELS: { [chainId in ChainId]?: string } = {
+  [ChainId.MAINNET]: 'Mainnet',
   [ChainId.RINKEBY]: 'Rinkeby',
   [ChainId.ROPSTEN]: 'Ropsten',
   [ChainId.GÖRLI]: 'Görli',
@@ -137,23 +118,18 @@ const NETWORK_LABELS: { [chainId in ChainId]?: string } = {
 }
 
 export default function Header() {
-  const { account, chainId } = useActiveWeb3React()
+  const { chainId } = useActiveWeb3React()
 
   return (
     <HeaderFrame>
       <HeaderControls>
-        <HeaderElementWrap>
-          <Menu />
-        </HeaderElementWrap>
         <HeaderElement>
           <HideSmall>
-            {chainId && NETWORK_LABELS[chainId] && (
+            {chainId && chainId !== ChainId.MAINNET && NETWORK_LABELS[chainId] && (
               <NetworkCard title={NETWORK_LABELS[chainId]}>{NETWORK_LABELS[chainId]}</NetworkCard>
             )}
           </HideSmall>
-          <AccountElement active={!!account} style={{ pointerEvents: 'auto' }}>
-            <Web3Status />
-          </AccountElement>
+          <Web3Status />
         </HeaderElement>
       </HeaderControls>
     </HeaderFrame>

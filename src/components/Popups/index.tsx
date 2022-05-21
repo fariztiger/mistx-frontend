@@ -33,14 +33,16 @@ const MobilePopupInner = styled.div`
 
 const FixedPopupColumn = styled(AutoColumn)<{ extraPadding: boolean }>`
   position: fixed;
-  bottom: ${({ extraPadding }) => (extraPadding ? '88px' : '52px')};
+  top: ${({ extraPadding }) => (extraPadding ? '171px' : '135px')};
   right: 1rem;
   max-width: 380px !important;
   width: 100%;
   z-index: 100;
+  height: 0;
 
   ${({ theme }) => theme.mediaWidth.upToMedium`
-    bottom: 120px;
+    top: 110px;
+    max-width: 260px ​!important;
     right: .5rem;
   `}
 
@@ -65,12 +67,9 @@ export default function Popups() {
       </FixedPopupColumn>
       <MobilePopupWrapper height={activePopups?.length > 0 ? 'fit-content' : 0}>
         <MobilePopupInner>
-          {activePopups // reverse so new items up front
-            .slice(0)
-            .reverse()
-            .map(item => (
-              <PopupItem key={item.key} content={item.content} popKey={item.key} removeAfterMs={item.removeAfterMs} />
-            ))}
+          {activePopups.map(item => (
+            <PopupItem key={item.key} content={item.content} popKey={item.key} removeAfterMs={item.removeAfterMs} />
+          ))}
         </MobilePopupInner>
       </MobilePopupWrapper>
     </>

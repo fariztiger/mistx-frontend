@@ -1,8 +1,9 @@
-import { Currency, CurrencyAmount, currencyEquals, Token } from '@alchemistcoin/sdk'
+import { Currency, CurrencyAmount, currencyEquals, Token, Ether } from '@alchemist-coin/mistx-core'
 import React, { CSSProperties, MutableRefObject, useCallback, useMemo } from 'react'
 import { FixedSizeList } from 'react-window'
 import { Text } from 'rebass'
 import styled from 'styled-components'
+import { v4 as uuidv4 } from 'uuid'
 import { useActiveWeb3React } from '../../hooks'
 import { useCombinedActiveList } from '../../state/lists/hooks'
 import { WrappedTokenInfo } from '../../state/lists/wrappedTokenInfo'
@@ -17,14 +18,17 @@ import { MenuItem } from './styleds'
 import Loader from '../Loader'
 import { isTokenOnList } from '../../utils'
 import ImportRow from './ImportRow'
-import { wrappedCurrency } from 'utils/wrappedCurrency'
 import { LightGreyCard } from 'components/Card'
 import TokenListLogo from '../../assets/svg/tokenlist.svg'
 import QuestionHelper from 'components/QuestionHelper'
 import useTheme from 'hooks/useTheme'
 
-function currencyKey(currency: Currency | WrappedTokenInfo): string {
-  return currency instanceof WrappedTokenInfo ? currency.address : 'ETHER'
+function currencyKey(currency: Currency | WrappedTokenInfo | Token): string {
+  return currency instanceof (WrappedTokenInfo || Token)
+    ? currency.address
+    : currency instanceof Ether
+    ? 'ETHER'
+    : uuidv4()
 }
 
 const StyledBalanceText = styled(Text)`
@@ -56,7 +60,7 @@ const FixedContentRow = styled.div`
   align-items: center;
 `
 
-function Balance({ balance }: { balance: CurrencyAmount }) {
+function Balance({ balance }: { balance: CurrencyAmount<Currency> }) {
   return <StyledBalanceText title={balance.toExact()}>{balance.toSignificant(4)}</StyledBalanceText>
 }
 
@@ -100,8 +104,12 @@ function TokenTags({ currency }: { currency: Currency }) {
 
 const mistFirst = (currencies: Currency[]): Currency[] =>
   currencies.reduce((arr: Currency[], currency: Currency) => {
+    if (currency.symbol === 'ETH') {
+      arr.splice(0, 0, currency)
+      return arr
+    }
     if (currency.symbol === 'MIST') {
-      arr.unshift(currency)
+      arr.splice(1, 0, currency)
       return arr
     }
     arr.push(currency)
@@ -134,22 +142,23 @@ function BreakLineComponent({ style }: { style: CSSProperties }) {
 }
 
 function CurrencyRow({
+  account,
   currency,
   onSelect,
+  isOnSelectedList,
   isSelected,
   otherSelected,
   style
 }: {
+  account: string | null | undefined
   currency: Currency
   onSelect: () => void
+  isOnSelectedList: boolean
   isSelected: boolean
   otherSelected: boolean
   style: CSSProperties
 }) {
-  const { account } = useActiveWeb3React()
   const key = currencyKey(currency)
-  const selectedTokenList = useCombinedActiveList()
-  const isOnSelectedList = isTokenOnList(selectedTokenList, currency)
   const customAdded = useIsUserAddedToken(currency)
   const balance = useCurrencyBalance(account ?? undefined, currency)
 
@@ -202,14 +211,15 @@ export default function CurrencyList({
   showImportView: () => void
   setImportToken: (token: Token) => void
 }) {
+  const { account } = useActiveWeb3React()
+  const selectedTokenList = useCombinedActiveList()
+
   const itemData: (Currency | BreakLine)[] = useMemo(() => {
     if (otherListTokens && otherListTokens?.length > 0) {
       return [...(showMIST ? mistFirst(currencies) : currencies), BREAK_LINE, ...otherListTokens]
     }
-    return currencies
+    return showMIST ? mistFirst(currencies) : currencies
   }, [currencies, otherListTokens, showMIST])
-
-  const { chainId } = useActiveWeb3React()
 
   const Row = useCallback(
     ({ data, index, style }) => {
@@ -218,11 +228,12 @@ export default function CurrencyList({
       if (isBreakLine(row)) {
         return <BreakLineComponent style={style} />
       }
+
       const currency = row
       const isSelected = Boolean(selectedCurrency && currencyEquals(selectedCurrency, currency))
       const otherSelected = Boolean(otherCurrency && currencyEquals(otherCurrency, currency))
       const handleSelect = () => onCurrencySelect(currency)
-      const token = wrappedCurrency(currency, chainId)
+      const token = currency?.wrapped
 
       const showImport = index > currencies.length
 
@@ -239,8 +250,10 @@ export default function CurrencyList({
       } else {
         return (
           <CurrencyRow
+            account={account}
             style={style}
             currency={currency}
+            isOnSelectedList={isTokenOnList(selectedTokenList, currency)}
             isSelected={isSelected}
             onSelect={handleSelect}
             otherSelected={otherSelected}
@@ -248,7 +261,16 @@ export default function CurrencyList({
         )
       }
     },
-    [chainId, currencies.length, onCurrencySelect, otherCurrency, selectedCurrency, setImportToken, showImportView]
+    [
+      account,
+      currencies.length,
+      onCurrencySelect,
+      otherCurrency,
+      selectedCurrency,
+      selectedTokenList,
+      setImportToken,
+      showImportView
+    ]
   )
 
   const itemKey = useCallback((index: number, data: any) => currencyKey(data[index]), [])

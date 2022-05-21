@@ -1,5 +1,5 @@
 import { Web3Provider } from '@ethersproject/providers'
-import { ChainId } from '@alchemistcoin/sdk'
+import { ChainId } from '@alchemist-coin/mistx-core'
 import { useWeb3React as useWeb3ReactCore } from '@web3-react/core'
 import { Web3ReactContextInterface } from '@web3-react/core/dist/types'
 import { useEffect, useState } from 'react'
@@ -74,6 +74,7 @@ export function useInactiveListener(suppress = false) {
 
       ethereum.on('chainChanged', handleChainChanged)
       ethereum.on('accountsChanged', handleAccountsChanged)
+      ethereum.on('providerChanged', handleChainChanged)
 
       return () => {
         if (ethereum.removeListener) {

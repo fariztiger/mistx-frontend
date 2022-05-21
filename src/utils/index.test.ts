@@ -1,6 +1,5 @@
 import { BigNumber } from '@ethersproject/bignumber'
-import { AddressZero } from '@ethersproject/constants'
-import { TokenAmount, Token, ChainId, Percent, JSBI } from '@alchemistcoin/sdk'
+import { ChainId, Percent, JSBI, CurrencyAmount, Ether } from '@alchemist-coin/mistx-core'
 
 import {
   getEtherscanLink,
@@ -35,7 +34,7 @@ describe('utils', () => {
 
   describe('#calculateSlippageAmount', () => {
     it('bounds are correct', () => {
-      const tokenAmount = new TokenAmount(new Token(ChainId.MAINNET, AddressZero, 0), '100')
+      const tokenAmount = CurrencyAmount.fromRawAmount(Ether.onChain(ChainId.MAINNET), '100')
       expect(() => calculateSlippageAmount(tokenAmount, -1)).toThrow()
       expect(calculateSlippageAmount(tokenAmount, 0).map(bound => bound.toString())).toEqual(['100', '100'])
       expect(calculateSlippageAmount(tokenAmount, 100).map(bound => bound.toString())).toEqual(['99', '101'])
@@ -86,9 +85,9 @@ describe('utils', () => {
   })
 
   describe('#calculateGasMargin', () => {
-    it('adds 10%', () => {
-      expect(calculateGasMargin(BigNumber.from(1000)).toString()).toEqual('1100')
-      expect(calculateGasMargin(BigNumber.from(50)).toString()).toEqual('55')
+    it('adds 25%', () => {
+      expect(calculateGasMargin(BigNumber.from(1000)).toString()).toEqual('1250')
+      expect(calculateGasMargin(BigNumber.from(100)).toString()).toEqual('125')
     })
   })
 

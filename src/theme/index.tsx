@@ -203,6 +203,8 @@ export const TYPE = {
 export const FixedGlobalStyle = createGlobalStyle`
 
 @import url('https://fonts.googleapis.com/css2?family=Poppins:wght@100;300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=VT323&display=swap');
 
 html, input, textarea, button {
   font-family: 'Inter', sans-serif;
@@ -244,18 +246,28 @@ html {
 `
 
 export const ThemedGlobalStyle = createGlobalStyle`
-html {
-  color: ${({ theme }) => theme.text1};
-  background-color: ${({ theme }) => theme.bg2};
-}
+  html {
+    color: ${({ theme }) => theme.text1};
+    background-color: ${({ theme }) => theme.bg2};
+  }
+  
+  body {
+    min-height: 100vh;
+    background-position: 0 -30vh;
+    background-repeat: no-repeat;
+    background: ${({ theme }) =>
+      `radial-gradient(48.8% 62.34% at 50% 0%, ${transparentize(0.1, theme.bg1)} 0%, ${transparentize(
+        1,
+        theme.bg2
+      )} 100%)`};
 
-body {
-  min-height: 100vh;
-  background-position: 0 -30vh;
-  background-repeat: no-repeat;
-  background: ${({ theme }) =>
-    `radial-gradient(48.8% 62.34% at 50% 0%, ${transparentize(0.1, theme.bg1)} 0%, ${transparentize(
-      1,
-      theme.bg2
-    )} 100%)`}}
+    &.scroll-disable  {
+      overflow: hidden;
+    } 
+  }
+  .intercom-lightweight-app-launcher {
+    ${({ theme }) => theme.mediaWidth.upToMedium`
+      bottom: 5px !important;
+    `};
+  }
 `

@@ -1,6 +1,5 @@
-import { Currency, Token } from '@alchemistcoin/sdk'
-import React, { useCallback, useEffect, useState } from 'react'
-import useLast from '../../hooks/useLast'
+import { Currency, Token } from '@alchemist-coin/mistx-core'
+import React, { useCallback, useState } from 'react'
 import Modal from '../Modal'
 import { CurrencySearch } from './CurrencySearch'
 import { ImportToken } from './ImportToken'
@@ -10,7 +9,6 @@ import { TokenList } from '@uniswap/token-lists'
 import { ImportList } from './ImportList'
 
 interface CurrencySearchModalProps {
-  isOpen: boolean
   onDismiss: () => void
   selectedCurrency?: Currency | null
   onCurrencySelect: (currency: Currency) => void
@@ -25,22 +23,14 @@ export enum CurrencyModalView {
   importList
 }
 
-export default function CurrencySearchModal({
-  isOpen,
+export default React.memo(function CurrencySearchModal({
   onDismiss,
   onCurrencySelect,
   selectedCurrency,
   otherSelectedCurrency,
   showCommonBases = false
 }: CurrencySearchModalProps) {
-  const [modalView, setModalView] = useState<CurrencyModalView>(CurrencyModalView.manage)
-  const lastOpen = useLast(isOpen)
-
-  useEffect(() => {
-    if (isOpen && !lastOpen) {
-      setModalView(CurrencyModalView.search)
-    }
-  }, [isOpen, lastOpen])
+  const [modalView, setModalView] = useState<CurrencyModalView>(CurrencyModalView.search)
 
   const handleCurrencySelect = useCallback(
     (currency: Currency) => {
@@ -64,10 +54,10 @@ export default function CurrencySearchModal({
   const minHeight = modalView === CurrencyModalView.importToken || modalView === CurrencyModalView.importList ? 40 : 80
 
   return (
-    <Modal isOpen={isOpen} onDismiss={onDismiss} maxHeight={80} minHeight={minHeight}>
+    <Modal isOpen={true} onDismiss={onDismiss} maxHeight={80} minHeight={minHeight}>
       {modalView === CurrencyModalView.search ? (
         <CurrencySearch
-          isOpen={isOpen}
+          isOpen={true}
           onDismiss={onDismiss}
           onCurrencySelect={handleCurrencySelect}
           selectedCurrency={selectedCurrency}
@@ -101,4 +91,4 @@ export default function CurrencySearchModal({
       )}
     </Modal>
   )
-}
+})

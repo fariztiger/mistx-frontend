@@ -1,16 +1,15 @@
-import React, { useState, useContext, useEffect } from 'react'
+import React, { useState, useContext } from 'react'
 import { Range, getTrackBackground } from 'react-range'
 import { ThemeContext } from 'styled-components'
-import { BribeEstimate, WETH, TokenAmount } from '@alchemistcoin/sdk'
-import useMinerBribeEstimate from '../../hooks/useMinerBribeEstimate'
-import useUSDCPrice from '../../hooks/useUSDCPrice'
-
+import MinerBribePrice from './MinerTipPrice'
+import { tipSettingToValue } from '../../state/user/reducer'
 type Props = {
   max: number
   min: number
   onChange: any
   value: number
   step: number
+  name: string
 }
 
 type ITrackProps = {
@@ -34,29 +33,12 @@ type IMarkProps = {
   index: number
 }
 
-// const SLIDER_VALUE_TO_THUMB_LABEL_MAP: string[] = ['25% Success', '70% Success', '90% Success', '99% Success']
-
 const SLIDER_VALUE_TO_LABEL_MAP: string[] = ['min success', 'med success', 'high success', 'max success']
 
-// const SLIDER_VALUE_TO_METHOD_MAP: any = ['minBribe', 'meanBribe', 'maxBribe', 'ASAP']
-
-const Slider = ({ max, min, onChange, value, step }: Props) => {
+const Slider = ({ max, min, onChange, value, step, name }: Props) => {
   const theme = useContext(ThemeContext)
   const [sliderValue, setSliderValue] = useState<number>(value)
-  const [sliderThumbLabel, setSliderThumbLabel] = useState<string>('')
-  const bribeEstimate: BribeEstimate | null = useMinerBribeEstimate()
-  const ethUSDCPrice = useUSDCPrice(WETH[1])
-  useEffect(() => {
-    let label = '.....'
-    if (bribeEstimate && ethUSDCPrice) {
-      const minBribeTokenAmount = new TokenAmount(WETH[1], bribeEstimate.minBribe.raw)
-      const maxBribeTokenAmount = new TokenAmount(WETH[1], bribeEstimate.maxBribe.raw)
-      label = `$${ethUSDCPrice.quote(minBribeTokenAmount).toSignificant(2)} - $${ethUSDCPrice
-        .quote(maxBribeTokenAmount)
-        .toSignificant(2)}`
-    }
-    setSliderThumbLabel(label)
-  }, [bribeEstimate, ethUSDCPrice])
+
   const onSliderChange = (values: any) => {
     setSliderValue(values)
     onChange(values[0])
@@ -78,7 +60,7 @@ const Slider = ({ max, min, onChange, value, step }: Props) => {
         max={max}
         onChange={values => onSliderChange(values)}
         renderMark={(props: IMarkProps) => (
-          <>
+          <div key={`slider-range-${name}-${props.index}`}>
             <div
               {...props.props}
               style={{
@@ -130,7 +112,7 @@ const Slider = ({ max, min, onChange, value, step }: Props) => {
                 </div>
               </div>
             </div>
-          </>
+          </div>
         )}
         renderTrack={(props: ITrackProps) => (
           <div
@@ -171,7 +153,8 @@ const Slider = ({ max, min, onChange, value, step }: Props) => {
                 top: '16px',
                 zIndex: 1,
                 borderRadius: '4px',
-                background: '#192431'
+                background: '#192431',
+                cursor: 'pointer'
               }}
             />
           </div>
@@ -200,16 +183,30 @@ const Slider = ({ max, min, onChange, value, step }: Props) => {
                 fontWeight: 700,
                 fontSize: '14px',
                 borderRadius: '4px',
-                backgroundColor: '#FFF',
-                color: theme.text5,
+                backgroundColor: '#222e3b',
+                border: '1px solid #ffbf01',
+                color: theme.text1,
                 padding: '0.25rem 0.5rem',
                 cursor: 'pointer',
-                width: '100px',
+                minWidth: '150px',
                 textAlign: 'center',
                 zIndex: 3
               }}
             >
-              {sliderThumbLabel}
+              <span
+                style={{
+                  position: 'absolute',
+                  bottom: '-7px',
+                  left: '50%',
+                  marginLeft: '-8px',
+                  fontWeight: 700,
+                  zIndex: 2,
+                  borderLeft: '8px solid transparent',
+                  borderTop: '7px solid #ffbf01',
+                  borderRight: '8px solid transparent'
+                }}
+              />
+              <MinerBribePrice customTipMargin={tipSettingToValue(value)} />
             </div>
             <div
               style={{

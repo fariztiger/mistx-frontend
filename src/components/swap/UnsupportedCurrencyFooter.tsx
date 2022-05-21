@@ -1,17 +1,21 @@
 import React, { useState } from 'react'
 import styled from 'styled-components'
+import { Currency, Token } from '@alchemist-coin/mistx-core'
+// theme
 import { TYPE, CloseIcon, ExternalLink } from 'theme'
-import { ButtonEmpty } from 'components/Button'
-import Modal from 'components/Modal'
-import Card, { OutlineCard } from 'components/Card'
-import { RowBetween, AutoRow } from 'components/Row'
-import { AutoColumn } from 'components/Column'
-import CurrencyLogo from 'components/CurrencyLogo'
-import { useActiveWeb3React } from 'hooks'
-import { getEtherscanLink } from 'utils'
-import { Currency, Token } from '@alchemistcoin/sdk'
-import { wrappedCurrency } from 'utils/wrappedCurrency'
+// hooks
+import { useActiveWeb3React } from '../../hooks'
 import { useUnsupportedTokens } from '../../hooks/Tokens'
+import { useIsTransactionUnsupported } from '../../hooks/Trades'
+// utils
+import { getEtherscanLink } from 'utils'
+// components
+import { ButtonEmpty } from '../Button'
+import Modal from '../Modal'
+import Card, { OutlineCard } from '../Card'
+import { RowBetween, AutoRow } from '../Row'
+import { AutoColumn } from '../Column'
+import CurrencyLogo from '../CurrencyLogo'
 
 const DetailsFooter = styled.div<{ show: boolean }>`
   padding-top: calc(16px + 2rem);
@@ -38,27 +42,22 @@ const AddressText = styled(TYPE.blue)`
 `}
 `
 
-export default function UnsupportedCurrencyFooter({
-  show,
-  currencies
-}: {
-  show: boolean
-  currencies: (Currency | undefined)[]
-}) {
+export default function UnsupportedCurrencyFooter({ currencies }: { currencies: (Currency | undefined)[] }) {
   const { chainId } = useActiveWeb3React()
+  const swapIsUnsupported = useIsTransactionUnsupported(currencies[0], currencies[1])
   const [showDetails, setShowDetails] = useState(false)
 
   const tokens =
     chainId && currencies
       ? currencies.map(currency => {
-          return wrappedCurrency(currency, chainId)
+          return currency?.wrapped
         })
       : []
 
   const unsupportedTokens: { [address: string]: Token } = useUnsupportedTokens()
 
   return (
-    <DetailsFooter show={show}>
+    <DetailsFooter show={swapIsUnsupported}>
       <Modal isOpen={showDetails} onDismiss={() => setShowDetails(false)}>
         <Card padding="2rem">
           <AutoColumn gap="lg">

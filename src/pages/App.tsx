@@ -1,18 +1,19 @@
 import React, { Suspense } from 'react'
 import { Route, Switch } from 'react-router-dom'
 import styled from 'styled-components'
-
 import GoogleAnalyticsReporter from '../components/analytics/GoogleAnalyticsReporter'
 import Header from '../components/Header'
 import Footer from '../components/Footer'
-import Polling from '../components/Header/Polling'
-import ConnectionStatus from '../components/ConnectionStatus'
 // import URLWarning from '../components/Header/URLWarning'
 import Popups from '../components/Popups'
+import NewAppVersionAvailable from '../components/NewAppVersionAvailable'
 import Web3ReactManager from '../components/Web3ReactManager'
 import DarkModeQueryParamReader from '../theme/DarkModeQueryParamReader'
 import Swap from './Swap'
 import { RedirectPathToSwapOnly, RedirectToSwap } from './Swap/redirects'
+import SideBar from '../components/SideBar'
+import Overlay from '../components/SideBar/overlay'
+import { ChatWidget } from 'components/ChatWidget'
 
 const AppWrapper = styled.div`
   display: flex;
@@ -20,7 +21,6 @@ const AppWrapper = styled.div`
   align-items: flex-start;
   overflow-x: hidden;
   min-height: 100vh;
-  background-image: url(/images/bg.svg);
 `
 
 const HeaderWrapper = styled.div`
@@ -43,15 +43,9 @@ const BodyWrapper = styled.div`
   ${({ theme }) => theme.mediaWidth.upToSmall`
     padding: 16px;
     padding-top: 2rem;
-    padding-bottom: 6rem;
-    margin-bottom: 72px;
   `};
 
   z-index: 1;
-`
-
-const Marginer = styled.div`
-  margin-top: 2.5rem;
 `
 
 export default function App() {
@@ -59,14 +53,14 @@ export default function App() {
     <Suspense fallback={null}>
       <Route component={GoogleAnalyticsReporter} />
       <Route component={DarkModeQueryParamReader} />
+      <Overlay />
       <AppWrapper>
         {/* <URLWarning /> */}
+        <SideBar />
         <HeaderWrapper>
           <Header />
         </HeaderWrapper>
         <BodyWrapper>
-          <Polling />
-          <ConnectionStatus />
           <Web3ReactManager>
             <Switch>
               <Route exact strict path="/exchange" component={Swap} />
@@ -75,11 +69,12 @@ export default function App() {
               <Route component={RedirectPathToSwapOnly} />
             </Switch>
           </Web3ReactManager>
-          <Marginer />
-          <Footer />
+          <Footer style={{ marginTop: '2.5rem' }} />
         </BodyWrapper>
       </AppWrapper>
       <Popups />
+      <NewAppVersionAvailable />
+      <ChatWidget />
     </Suspense>
   )
 }

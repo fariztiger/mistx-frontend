@@ -1,4 +1,10 @@
-import { INITIAL_ALLOWED_SLIPPAGE, DEFAULT_DEADLINE_FROM_NOW, INITIAL_BRIBE_MARGIN } from '../../constants'
+import {
+  INITIAL_ALLOWED_SLIPPAGE,
+  DEFAULT_DEADLINE_FROM_NOW,
+  INITIAL_BRIBE_MARGIN,
+  MINER_BRIBE_MIN,
+  MINER_BRIBE_MAX
+} from '../../constants'
 import { createReducer } from '@reduxjs/toolkit'
 import { updateVersion } from '../global/actions'
 import {
@@ -15,11 +21,11 @@ import {
   updateUserBribeMargin,
   updateUserDeadline,
   toggleURLWarning,
-  updateUserSingleHopOnly
+  updateUserSingleHopOnly,
+  updateFeeDisplayCurrency
 } from './actions'
 
 const currentTimestamp = () => new Date().getTime()
-
 export interface UserState {
   // the timestamp of the last updateVersion action
   lastUpdateVersionTimestamp?: number
@@ -55,10 +61,31 @@ export interface UserState {
 
   timestamp: number
   URLWarningVisible: boolean
+  feeDisplayCurrency: 'ETH' | 'USD'
 }
 
 function pairKey(token0Address: string, token1Address: string) {
   return `${token0Address};${token1Address}`
+}
+
+export const TipSettingsSteps = 4
+
+export function tipSettingToValue(setting: number): number {
+  const size = MINER_BRIBE_MAX - MINER_BRIBE_MIN
+  const value = Math.floor(size / (TipSettingsSteps - 1)) * (setting - 1) + MINER_BRIBE_MIN
+  return value
+}
+
+export function tipValueToSetting(value: number): number {
+  let closest = 1
+  for (let i = 2; i <= TipSettingsSteps; i++) {
+    const aVal = tipSettingToValue(closest)
+    const bVal = tipSettingToValue(i)
+    if (Math.abs(bVal - value) < Math.abs(aVal - value)) {
+      closest = i
+    }
+  }
+  return closest
 }
 
 export const initialState: UserState = {
@@ -72,7 +99,8 @@ export const initialState: UserState = {
   tokens: {},
   pairs: {},
   timestamp: currentTimestamp(),
-  URLWarningVisible: true
+  URLWarningVisible: true,
+  feeDisplayCurrency: 'USD'
 }
 
 export default createReducer(initialState, builder =>
@@ -162,5 +190,8 @@ export default createReducer(initialState, builder =>
     })
     .addCase(toggleURLWarning, state => {
       state.URLWarningVisible = !state.URLWarningVisible
+    })
+    .addCase(updateFeeDisplayCurrency, (state, { payload }) => {
+      state.feeDisplayCurrency = payload
     })
 )

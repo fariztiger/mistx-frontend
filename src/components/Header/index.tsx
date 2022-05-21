@@ -1,14 +1,22 @@
-import React from 'react'
-import { NavLink, Link } from 'react-router-dom'
+import React, { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { darken, rem } from 'polished'
 import { useTranslation } from 'react-i18next'
 import styled from 'styled-components'
+// hooks
+import { useSideBarOpen } from '../../state/application/hooks'
+// components
 import { ReactComponent as Logo } from '../../assets/svg/logo.svg'
-import { ReactComponent as LogoLight } from '../../assets/svg/logo_light.svg'
+import { ReactComponent as LogoMobile } from '../../assets/svg/logo_mobile.svg'
+import { ReactComponent as AlchemistLogo } from '../../assets/images/alchemist_logo.svg'
+import { ReactComponent as MenuIcon } from '../../assets/images/menu_icon.svg'
+import { ReactComponent as LeaderboardIcon } from '../../assets/svg/leaderboard-icon.svg'
 import { ExternalLink } from '../../theme'
 import Row, { RowFixed } from '../Row'
 import WalletConnect from '../../components/WalletConnect'
-import { useDarkModeManager } from '../../state/user/hooks'
+import { ButtonIcon } from '../../components/Button'
+import RewardsLeaderboard from '../../components/Rewards/RewardsLeaderboard'
+import { MouseoverTooltip } from 'components/Tooltip'
 
 const HeaderFrame = styled.div`
   display: flex;
@@ -43,11 +51,31 @@ const HeaderLinks = styled(Row)`
 `};
 `
 
+const MistLogoWrapper = styled.div`
+  width: 32px;
+  margin: 0 25px 0 0;
+  display: flex;
+
+  ${({ theme }) => theme.mediaWidth.upToMedium`
+     display: none;
+ `};
+
+  svg {
+    display: flex;
+    width: 100%;
+  }
+`
+
 const LogoWrapper = styled.div`
   display: flex;
   flex-direction: row;
   margin: 1rem 0 0.1rem 0;
   height: ${rem(80)};
+  width: ${rem(80)};
+
+  ${({ theme }) => theme.mediaWidth.upToMedium`
+    display: none;
+  `};
 
   > svg {
     height: 100%;
@@ -64,7 +92,9 @@ const LogoWrapperMobile = styled.div`
 
   > a {
     position: relative;
-    right: 5rem;
+    height: auto;
+    width: 70px;
+    right: 10px;
   }
 
   > svg {
@@ -73,70 +103,37 @@ const LogoWrapperMobile = styled.div`
   }
 `
 
+const MenuWrapper = styled.div`
+  display: flex;
+
+  svg {
+    height: 28px;
+    width: auto;
+
+    ${({ theme }) => theme.mediaWidth.upToMedium`
+      height: 28px;
+    `};
+  }
+`
+
 const LogoLink = styled(Link)`
   display: flex;
   flex-direction: column;
-`
 
-const HideSmall = styled.div`
-  display: flex;
-  ${({ theme }) => theme.mediaWidth.upToSmall`
-    display: none;
-  `};
+  svg {
+    height: 100%;
+    width: auto;
+  }
 `
 
 const HideLarge = styled.div`
   display: none;
-  ${({ theme }) => theme.mediaWidth.upToSmall`
+  ${({ theme }) => theme.mediaWidth.upToMedium`
     display: flex;
   `};
 `
 
 const activeClassName = 'ACTIVE'
-
-const StyledNavLink = styled(NavLink).attrs({
-  activeClassName
-})`
-  ${({ theme }) => theme.flexRowNoWrap}
-  align-items: left;
-  border-radius: 3rem;
-  outline: none;
-  cursor: pointer;
-  text-decoration: none;
-  color: ${({ theme }) => theme.secondaryText1};
-  font-size: 1rem;
-  width: fit-content;
-  margin: 0 2.5rem 0 0;
-  font-weight: 500;
-  position: relative;
-
-  &.${activeClassName} {
-    border-radius: 12px;
-    font-weight: 700;
-    color: ${({ theme }) => theme.text1};
-
-    &:after {
-      content: '';
-      width: ${rem(35)};
-      height: ${rem(4)};
-      bottom: -${rem(15)};
-      left: 0;
-      position: absolute;
-      background: ${({ theme }) => theme.secondaryText1};
-      border-radius: 1rem;
-
-      :hover,
-      :focus {
-        color: ${({ theme }) => darken(0.1, theme.secondaryText1)};
-      }
-    }
-  }
-
-  :hover,
-  :focus {
-    color: ${({ theme }) => darken(0.1, theme.text1)};
-  }
-`
 
 const StyledExternalLink = styled(ExternalLink).attrs({
   activeClassName
@@ -175,10 +172,6 @@ const StyledExternalLink = styled(ExternalLink).attrs({
   `}
 `
 
-export const StyledExternalLinkEl = styled.span`
-  margin: 0 0 0 0.5rem;
-`
-
 export const SocialLinkWrapper = styled.div`
   display: flex;
   position: relative;
@@ -195,6 +188,10 @@ const StyledEllipseWapper = styled.div`
   opacity: 0;
   transition: opacity 0.2s ease-in;
 
+  &:hover {
+    color: ${({ theme }) => theme.primary2};
+  }
+
   > svg {
     height: ${rem(40)};
     width: auto;
@@ -203,8 +200,10 @@ const StyledEllipseWapper = styled.div`
 
 export const SocialLink = styled(ExternalLink)`
   display: flex;
+  font-size: 1rem;
   position: absolute;
   top: 0;
+  white-space: nowrap;
 
   &:hover {
     ${StyledEllipseWapper} {
@@ -218,39 +217,104 @@ export const SocialLink = styled(ExternalLink)`
   }
 `
 
+const LeaderboardButton = styled.button`
+  align-items: center;
+  background-color: transparent;
+  border: 2px solid ${({ theme }) => theme.secondaryText1};
+  border-radius: 1.3125rem;
+  color: ${({ theme }) => theme.secondaryText1};
+  cursor: pointer;
+  display: flex;
+  font-size: 0.875rem;
+  height: 2.625rem;
+  justify-content: center;
+  width: 2.625rem;
+  padding: 0.5rem;
+  white-space: nowrap;
+
+  :hover,
+  :focus {
+    color: ${({ theme }) => darken(0.2, theme.secondaryText1)};
+
+    > svg {
+      fill: ${({ theme }) => darken(0.2, theme.primary2)};
+    }
+  }
+
+  > svg {
+    fill: ${({ theme }) => theme.primary2};
+    height: 1.25rem;
+    width: auto;
+  }
+
+  ${({ theme }) => theme.mediaWidth.upToExtraSmall`
+    border: 0;
+    
+    > svg {
+      height: 1.75rem;
+    }
+  `}
+`
+
 export default function Header() {
   const { t } = useTranslation()
-  const [darkMode] = useDarkModeManager()
+  const { toggleSideBar } = useSideBarOpen()
+  const [showLeaderboard, setShowLeaderboard] = useState(false)
+
+  function handleLeaderboardClick() {
+    setShowLeaderboard(true)
+  }
+
+  function handleCloseLeaderboard() {
+    setShowLeaderboard(false)
+  }
 
   return (
     <HeaderFrame>
       <HideLarge>
         <LogoWrapperMobile>
           <LogoLink to="/" title={t('mistx')}>
-            {darkMode ? <Logo /> : <LogoLight />}
+            <LogoMobile />
           </LogoLink>
         </LogoWrapperMobile>
       </HideLarge>
       <HeaderRow align="start">
         <HeaderLinks>
-          <StyledNavLink id={`swap-nav-link`} to={'/exchange'}>
-            {t('exchange')}
-          </StyledNavLink>
-          <StyledExternalLink id={`stake-nav-link`} href={'https://crucible.alchemist.wtf'}>
-            {t('crucible')} <StyledExternalLinkEl style={{ fontSize: '11px' }}>↗</StyledExternalLinkEl>
+          <MistLogoWrapper>
+            <Link to="/" title={t('mistx')}>
+              <AlchemistLogo />
+            </Link>
+          </MistLogoWrapper>
+          <StyledExternalLink id={`sandwiched-nav-link`} rel="" href={'https://crucible.alchemist.wtf'}>
+            Crucible
+          </StyledExternalLink>
+          <StyledExternalLink id={`sandwiched-nav-link`} rel="" href={'https://copperlaunch.com'}>
+            Copper
+          </StyledExternalLink>
+          <StyledExternalLink id={`sandwiched-nav-link`} rel="" href={'https://sandwiched.wtf'}>
+            Sandwiched
           </StyledExternalLink>
         </HeaderLinks>
       </HeaderRow>
-      <HideSmall>
-        <LogoWrapper>
-          <LogoLink to="/" title={t('mistx')}>
-            {darkMode ? <Logo /> : <LogoLight />}
-          </LogoLink>
-        </LogoWrapper>
-      </HideSmall>
-      <HeaderRow align="end" justify="flex-end">
+      <LogoWrapper>
+        <LogoLink to="/" title={t('mistx')}>
+          <Logo />
+        </LogoLink>
+      </LogoWrapper>
+      <HeaderRow align="center" justify="flex-end">
+        <MouseoverTooltip text="Top Rewards" placement="bottom">
+          <LeaderboardButton onClick={handleLeaderboardClick} type="button">
+            <LeaderboardIcon />
+          </LeaderboardButton>
+        </MouseoverTooltip>
         <WalletConnect />
+        <MenuWrapper>
+          <ButtonIcon onClick={() => toggleSideBar()}>
+            <MenuIcon />
+          </ButtonIcon>
+        </MenuWrapper>
       </HeaderRow>
+      {showLeaderboard && <RewardsLeaderboard onClose={handleCloseLeaderboard} />}
     </HeaderFrame>
   )
 }

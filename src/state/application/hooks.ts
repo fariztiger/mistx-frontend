@@ -1,9 +1,17 @@
 import { useCallback, useMemo } from 'react'
 import { useDispatch, useSelector } from 'react-redux'
+import { Fees } from '@alchemist-coin/mistx-connect'
 import { useActiveWeb3React } from '../../hooks'
 import { AppDispatch, AppState } from '../index'
-import { Gas } from './reducer'
-import { addPopup, ApplicationModal, PopupContent, removePopup, setOpenModal } from './actions'
+import {
+  addPopup,
+  ApplicationModal,
+  PopupContent,
+  removePopup,
+  setOpenModal,
+  updateNewAppVersionAvailable,
+  toggleSideBar as toggleSideBarAction
+} from './actions'
 
 export function useBlockNumber(): number | undefined {
   const { chainId } = useActiveWeb3React()
@@ -11,8 +19,8 @@ export function useBlockNumber(): number | undefined {
   return useSelector((state: AppState) => state.application.blockNumber[chainId ?? -1])
 }
 
-export function useGas(): Gas | undefined {
-  return useSelector((state: AppState) => state.application.gas)
+export function useFees(): Fees | undefined {
+  return useSelector((state: AppState) => state.application.fees)
 }
 
 export function useModalOpen(modal: ApplicationModal): boolean {
@@ -56,6 +64,12 @@ export function useToggleSelfClaimModal(): () => void {
   return useToggleModal(ApplicationModal.SELF_CLAIM)
 }
 
+export function useTransactionErrorModalOpen(): any {
+  const modalPerfernce = localStorage.getItem('hideMMHardwareModal')
+  const openModal = useSelector((state: AppState) => state.application.openModal)
+  return openModal === ApplicationModal.MMHARDWARE && !modalPerfernce
+}
+
 // returns a function that allows adding a popup
 export function useAddPopup(): (content: PopupContent, key?: string, removeAfterMs?: number) => void {
   const dispatch = useDispatch()
@@ -87,4 +101,40 @@ export function useActivePopups(): AppState['application']['popupList'] {
 
 export function useSocketStatus(): AppState['application']['socketStatus'] {
   return useSelector<AppState, AppState['application']['socketStatus']>(state => state.application.socketStatus)
+}
+
+export function useNewAppVersionAvailable(): [boolean, (newAppVersionAvailable: boolean) => void] {
+  const dispatch = useDispatch<AppDispatch>()
+  const newAppVersionAvailable = useSelector<AppState, AppState['application']['newAppVersionAvailable']>(
+    state => state.application.newAppVersionAvailable
+  )
+
+  const setnewAppVersionAvailable = useCallback(
+    (newAppVersionAvailable: boolean) => dispatch(updateNewAppVersionAvailable(newAppVersionAvailable)),
+    [dispatch]
+  )
+
+  return [newAppVersionAvailable, setnewAppVersionAvailable]
+}
+
+export function useSideBarOpen(): any {
+  const dispatch = useDispatch()
+  const sideBarOpen = useSelector((state: AppState) => state.application.sideBarOpen)
+
+  const toggleSideBar = useCallback(() => {
+    dispatch(toggleSideBarAction())
+    if (window.Intercom) {
+      window.Intercom('hide')
+      window.Intercom('update', {
+        hide_default_launcher: !sideBarOpen
+      })
+    }
+    if (sideBarOpen) {
+      document.body.classList.remove('scroll-disable')
+    } else {
+      document.body.classList.add('scroll-disable')
+    }
+  }, [dispatch, sideBarOpen])
+
+  return useMemo(() => ({ sideBarOpen, toggleSideBar }), [sideBarOpen, toggleSideBar])
 }

@@ -1,4 +1,4 @@
-import { Trade, TradeType, Price, TokenAmount, WETH } from '@alchemistcoin/sdk'
+import { Trade, Token, TradeType, Price, Currency } from '@alchemist-coin/mistx-core'
 import { SettingsHeader } from 'components/shared/header/styled'
 import { darken } from 'polished'
 import React, { useContext, useMemo, useState } from 'react'
@@ -13,12 +13,16 @@ import {
   formatExecutionPrice,
   warningSeverity
 } from '../../utils/prices'
+import Circle from '../../assets/images/light-loader.svg'
+import { CustomLightSpinner } from '../../theme'
 import { ButtonError } from '../Button'
 import { AutoColumn } from '../Column'
 import QuestionHelper from '../QuestionHelper'
 import { AutoRow, RowBetween, RowFixed } from '../Row'
 import FormattedPriceImpact from './FormattedPriceImpact'
 import { StyledBalanceMaxMini, SwapCallbackError } from './styleds'
+import useTotalFeesForTrade from 'hooks/useTotalFeesForTrade'
+import MinerTipPrice from '../swap/MinerTipPrice'
 
 const PriceWrapper = styled.div`
   background-color: ${({ theme }) => theme.bg4};
@@ -73,6 +77,17 @@ const ConfirmButton = styled(ButtonError)`
   }
 `
 
+const StyledQuestionHelper = styled(QuestionHelper)`
+  width: 20px;
+  margin-left: 10px;
+  svg {
+    circle,
+    path {
+      fill: #fff;
+    }
+  }
+`
+
 export default function SwapModalFooter({
   trade,
   onConfirm,
@@ -81,12 +96,12 @@ export default function SwapModalFooter({
   disabledConfirm,
   ethUSDCPrice
 }: {
-  trade: Trade
+  trade: Trade<Currency, Currency, TradeType>
   allowedSlippage: number
   onConfirm: () => void
   swapErrorMessage: string | undefined
   disabledConfirm: boolean
-  ethUSDCPrice: Price | undefined
+  ethUSDCPrice: Price<Currency, Token> | undefined
 }) {
   const [showInverted, setShowInverted] = useState<boolean>(false)
   const theme = useContext(ThemeContext)
@@ -96,6 +111,9 @@ export default function SwapModalFooter({
   ])
   const { priceImpactWithoutFee, realizedLPFee } = useMemo(() => computeTradePriceBreakdown(trade), [trade])
   const severity = warningSeverity(priceImpactWithoutFee)
+  const { maxTotalFeeInEth, totalFeeInEth, realizedLPFeeInEth, baseFeeInEth, maxBaseFeeInEth } = useTotalFeesForTrade(
+    trade
+  )
 
   return (
     <>
@@ -112,38 +130,60 @@ export default function SwapModalFooter({
             }}
           >
             {formatExecutionPrice(trade, showInverted)}
-            <StyledBalanceMaxMini onClick={() => setShowInverted(!showInverted)}>
+            <StyledBalanceMaxMini onClick={() => setShowInverted(!showInverted)} style={{ marginRight: '.5rem' }}>
               <Repeat size={14} />
             </StyledBalanceMaxMini>
           </Text>
-          <Text fontWeight={400} fontSize={14} color={theme.green2}>
+          <Text fontWeight={400} fontSize={14} color={theme.green2} style={{ whiteSpace: 'nowrap' }}>
             Current Price
           </Text>
         </RowBetween>
       </PriceWrapper>
-      <AutoColumn gap="14px" style={{ padding: '2.5rem 1.5rem' }}>
-        <SettingsHeader style={{ marginBottom: '.625rem' }}>
-          <Text fontWeight={600} fontSize={20}>
-            Breakdown
-          </Text>
-        </SettingsHeader>
+      <AutoColumn gap="15px" style={{ padding: '1.5rem 1.5rem 0' }}>
         <RowBetween>
           <RowFixed>
             <TYPE.black fontSize={14} fontWeight={400} color={theme.text2}>
               {trade.tradeType === TradeType.EXACT_INPUT ? 'Minimum received' : 'Maximum sold'}
             </TYPE.black>
-            <QuestionHelper text="Your transaction will revert if there is a large, unfavorable price movement before it is confirmed." />
+            <StyledQuestionHelper
+              text="Your transaction will revert if there is a large, unfavorable price movement before it is confirmed."
+              small
+            />
+          </RowFixed>
+          <RowFixed>
+            {ethUSDCPrice ? (
+              <>
+                <TYPE.black fontSize={14} fontWeight={700}>
+                  {trade.tradeType === TradeType.EXACT_INPUT
+                    ? slippageAdjustedAmounts[Field.OUTPUT]?.toSignificant(4) ?? '-'
+                    : slippageAdjustedAmounts[Field.INPUT]?.toSignificant(4) ?? '-'}
+                </TYPE.black>
+                <TYPE.black fontSize={14} marginLeft={'4px'} fontWeight={700}>
+                  {trade.tradeType === TradeType.EXACT_INPUT
+                    ? trade.outputAmount.currency.symbol
+                    : trade.inputAmount.currency.symbol}
+                </TYPE.black>
+              </>
+            ) : (
+              <TYPE.black fontSize={14} fontWeight={700}>
+                Loading...
+              </TYPE.black>
+            )}
+          </RowFixed>
+        </RowBetween>
+        <RowBetween>
+          <RowFixed>
+            <TYPE.black fontSize={14} fontWeight={400} color={theme.text2}>
+              Slippage Tolerance
+            </TYPE.black>
+            <StyledQuestionHelper
+              text="Your transaction will revert if the price changes unfavorably by more than this percentage."
+              small
+            />
           </RowFixed>
           <RowFixed>
             <TYPE.black fontSize={14} fontWeight={700}>
-              {trade.tradeType === TradeType.EXACT_INPUT
-                ? slippageAdjustedAmounts[Field.OUTPUT]?.toSignificant(4) ?? '-'
-                : slippageAdjustedAmounts[Field.INPUT]?.toSignificant(4) ?? '-'}
-            </TYPE.black>
-            <TYPE.black fontSize={14} marginLeft={'4px'} fontWeight={700}>
-              {trade.tradeType === TradeType.EXACT_INPUT
-                ? trade.outputAmount.currency.symbol
-                : trade.inputAmount.currency.symbol}
+              {`${(allowedSlippage / 100).toFixed(2)}%`}
             </TYPE.black>
           </RowFixed>
         </RowBetween>
@@ -152,32 +192,136 @@ export default function SwapModalFooter({
             <TYPE.black color={theme.text2} fontSize={14} fontWeight={400}>
               Price Impact
             </TYPE.black>
-            <QuestionHelper text="The difference between the market price and your price due to trade size." />
+            <StyledQuestionHelper
+              text="The difference between the market price and your price due to trade size."
+              small
+            />
           </AutoRow>
           <FormattedPriceImpact priceImpact={priceImpactWithoutFee} />
         </RowBetween>
+      </AutoColumn>
+      <AutoColumn gap="0px" style={{ padding: '1rem 1.5rem 1rem' }}>
+        <SettingsHeader style={{ marginBottom: '10px' }}>
+          <Text fontWeight={600} fontSize={20}>
+            Fee Breakdown
+          </Text>
+        </SettingsHeader>
+
         <RowBetween>
-          <AutoRow width="fit-content">
+          <AutoRow width="fit-content" marginBottom="5px">
             <TYPE.black fontSize={14} fontWeight={400} color={theme.text2}>
-              Liquidity Provider Fee
+              MistX Protection
             </TYPE.black>
-            <QuestionHelper text="A portion of each trade (0.30%) goes to liquidity providers as a protocol incentive." />
+            <QuestionHelper
+              text="Represents a fee sent to the miner to include your transaction privately and a fee sent to Alchemist for providing mistX protection services"
+              small
+            />
           </AutoRow>
           <TYPE.black fontSize={14} fontWeight={700}>
-            {realizedLPFee ? realizedLPFee?.toSignificant(6) + ' ' + trade.inputAmount.currency.symbol : '-'}
+            <MinerTipPrice trade={trade} />
           </TYPE.black>
         </RowBetween>
-        <RowBetween>
+
+        <AutoRow width="fit-content" marginBottom="15px">
+          <TYPE.black fontSize={12} fontWeight={400} color={theme.text2}>
+            Protection from front-running attacks, cancellation fees, and failure costs. Includes tip sent to miner.
+          </TYPE.black>
+        </AutoRow>
+
+        <RowBetween marginBottom="15px">
           <AutoRow width="fit-content">
             <TYPE.black fontSize={14} fontWeight={400} color={theme.text2}>
-              Transaction Fee
+              Liquidity Provider
             </TYPE.black>
-            <QuestionHelper text="A tip for the miner to accept the transaction." />
+            <StyledQuestionHelper
+              text={`Charged by liquidity providers (Uniswap or Sushiswap), mistX gets 0% of this fee.${
+                realizedLPFee ? ` ${realizedLPFee.toSignificant(5)} ${trade.inputAmount.currency.symbol}` : ''
+              }`}
+              small
+            />
           </AutoRow>
+
           <TYPE.black fontSize={14} fontWeight={700}>
-            {ethUSDCPrice
-              ? `$ ${ethUSDCPrice.quote(new TokenAmount(WETH[1], trade.minerBribe.raw)).toSignificant(4)}`
-              : `Loading...`}
+            {ethUSDCPrice && realizedLPFeeInEth && `$${ethUSDCPrice.quote(realizedLPFeeInEth).toFixed(2)} `}
+            {realizedLPFee ? (
+              '(' + realizedLPFee?.toSignificant(3) + ' ' + trade.inputAmount.currency.symbol + ')'
+            ) : (
+              <CustomLightSpinner src={Circle} alt="loader" size={'15px'} />
+            )}
+          </TYPE.black>
+        </RowBetween>
+
+        <RowBetween marginBottom="10px">
+          <AutoRow width="fit-content">
+            <TYPE.black fontSize={14} fontWeight={400} color={theme.text2}>
+              ETH Base Fee (Estimated)
+            </TYPE.black>
+            <StyledQuestionHelper
+              text={`Standard network fee for successful use of the ETH blockchain, mistX gets 0% of this fee.${
+                baseFeeInEth ? ` ${baseFeeInEth.toSignificant(5)} ETH` : ''
+              }`}
+              small
+            />
+          </AutoRow>
+
+          <TYPE.black fontSize={14} fontWeight={700}>
+            {ethUSDCPrice && baseFeeInEth && `$${ethUSDCPrice.quote(baseFeeInEth).toFixed(2)} `}
+            {baseFeeInEth ? (
+              '(' + baseFeeInEth?.toSignificant(3) + ' ETH)'
+            ) : (
+              <CustomLightSpinner src={Circle} alt="loader" size={'15px'} />
+            )}
+          </TYPE.black>
+        </RowBetween>
+        <RowBetween marginBottom="15px" style={{ opacity: '0.4' }}>
+          <AutoRow width="fit-content">
+            <TYPE.black fontSize={14} fontWeight={400} color={theme.text2}>
+              ┗ Max ETH Base Fee
+            </TYPE.black>
+            <StyledQuestionHelper
+              text={`Max allowed network fee. If the base fee surpasses this amount, your transaction will fail.${
+                maxBaseFeeInEth ? ` ${maxBaseFeeInEth.toSignificant(5)} ETH` : ''
+              }`}
+              small
+            />
+          </AutoRow>
+
+          <TYPE.black fontSize={14} fontWeight={500}>
+            {ethUSDCPrice && maxBaseFeeInEth && `up to $${ethUSDCPrice.quote(maxBaseFeeInEth).toFixed(2)} `}
+            {maxBaseFeeInEth ? (
+              '(' + maxBaseFeeInEth?.toSignificant(3) + ' ETH)'
+            ) : (
+              <CustomLightSpinner src={Circle} alt="loader" size={'15px'} />
+            )}
+          </TYPE.black>
+        </RowBetween>
+
+        <RowBetween marginBottom="10px">
+          <AutoRow width="fit-content">
+            <TYPE.black fontSize={14} fontWeight={400} color={theme.text2}>
+              Total (Estimated)
+            </TYPE.black>
+            <StyledQuestionHelper text={`Estimated Total Fee for this swap`} small />
+          </AutoRow>
+
+          <TYPE.black fontSize={14} fontWeight={700}>
+            {ethUSDCPrice && totalFeeInEth && `$${ethUSDCPrice.quote(totalFeeInEth).toFixed(2)} `}
+            {totalFeeInEth ? (
+              '(' + totalFeeInEth?.toSignificant(3) + ' ETH)'
+            ) : (
+              <CustomLightSpinner src={Circle} alt="loader" size={'15px'} />
+            )}
+          </TYPE.black>
+        </RowBetween>
+        <RowBetween style={{ opacity: 0.4 }}>
+          <AutoRow width="fit-content" />
+          <TYPE.black fontSize={14} fontWeight={500}>
+            {ethUSDCPrice && maxTotalFeeInEth && `up to $${ethUSDCPrice.quote(maxTotalFeeInEth).toFixed(2)} `}
+            {maxTotalFeeInEth ? (
+              '(' + maxTotalFeeInEth?.toSignificant(3) + ' ETH)'
+            ) : (
+              <CustomLightSpinner src={Circle} alt="loader" size={'15px'} />
+            )}
           </TYPE.black>
         </RowBetween>
       </AutoColumn>

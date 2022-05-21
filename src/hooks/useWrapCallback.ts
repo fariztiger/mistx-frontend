@@ -1,10 +1,11 @@
-import { Currency, currencyEquals, ETHER, WETH } from '@alchemistcoin/sdk'
+import { Currency, currencyEquals, WETH } from '@alchemist-coin/mistx-core'
 import { useMemo } from 'react'
 import { tryParseAmount } from '../state/swap/hooks'
 import { useTransactionAdder } from '../state/transactions/hooks'
 import { useCurrencyBalance } from '../state/wallet/hooks'
 import { useActiveWeb3React } from './index'
 import { useWETHContract } from './useContract'
+import FATHOM_GOALS from '../constants/fathom'
 
 export enum WrapType {
   NOT_APPLICABLE,
@@ -37,21 +38,23 @@ export default function useWrapCallback(
 
     const sufficientBalance = inputAmount && balance && !balance.lessThan(inputAmount)
 
-    if (inputCurrency === ETHER && currencyEquals(WETH[chainId], outputCurrency)) {
+    if (inputCurrency.isNative && currencyEquals(WETH[chainId], outputCurrency)) {
       return {
         wrapType: WrapType.WRAP,
         execute:
           sufficientBalance && inputAmount
             ? async () => {
                 try {
-                  console.log('input amount', inputAmount)
-                  const txReceipt = await wethContract.deposit({ value: `0x${inputAmount.raw.toString(16)}` })
+                  const txReceipt = await wethContract.deposit({ value: `0x${inputAmount.quotient.toString(16)}` })
                   addTransaction(txReceipt, {
                     summary: `Wrap ${inputAmount.toSignificant(6)} ETH to WETH`,
                     wrapType: WrapType.WRAP,
                     inputAmount,
                     outputAmount
                   })
+                  if (window.fathom) {
+                    window.fathom.trackGoal(FATHOM_GOALS.WRAP_INTENT, 0)
+                  }
                 } catch (error) {
                   console.error('Could not deposit', error)
                 }
@@ -59,20 +62,23 @@ export default function useWrapCallback(
             : undefined,
         inputError: sufficientBalance ? undefined : 'Insufficient ETH balance'
       }
-    } else if (currencyEquals(WETH[chainId], inputCurrency) && outputCurrency === ETHER) {
+    } else if (currencyEquals(WETH[chainId], inputCurrency) && outputCurrency.isNative) {
       return {
         wrapType: WrapType.UNWRAP,
         execute:
           sufficientBalance && inputAmount
             ? async () => {
                 try {
-                  const txReceipt = await wethContract.withdraw(`0x${inputAmount.raw.toString(16)}`)
+                  const txReceipt = await wethContract.withdraw(`0x${inputAmount.quotient.toString(16)}`)
                   addTransaction(txReceipt, {
                     summary: `Unwrap ${inputAmount.toSignificant(6)} WETH to ETH`,
                     wrapType: WrapType.UNWRAP,
                     inputAmount,
                     outputAmount
                   })
+                  if (window.fathom) {
+                    window.fathom.trackGoal(FATHOM_GOALS.UNWRAP_INTENT, 0)
+                  }
                 } catch (error) {
                   console.error('Could not withdraw', error)
                 }

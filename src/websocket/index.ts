@@ -1,40 +1,43 @@
-import { useEffect } from 'react'
+import { useEffect, useRef } from 'react'
 import { useDispatch } from 'react-redux'
-import { io, Socket } from 'socket.io-client'
-import { BigNumberish } from '@ethersproject/bignumber'
 import { keccak256 } from '@ethersproject/keccak256'
 import { updateSocketStatus } from '../state/application/actions'
+import PJSON from '../../package.json'
 import { MANUAL_CHECK_TX_STATUS_INTERVAL } from '../constants'
+import FATHOM_GOALS from '../constants/fathom'
+import {
+  BundleProcessed,
+  BundleReq,
+  BundleRes,
+  BundleResApi,
+  Event,
+  Fees,
+  MistxSocket,
+  Status,
+  TransactionProcessed
+} from '@alchemist-coin/mistx-connect'
+import { setOpenModal, ApplicationModal } from '../state/application/actions'
 
 // state
-import { updateGas } from '../state/application/actions'
-import { Gas } from '../state/application/reducer'
+import { updateFees } from '../state/application/actions'
+import { useSocketStatus, useNewAppVersionAvailable } from '../state/application/hooks'
 import {
   useAllTransactions,
   useTransactionRemover,
   useTransactionUpdater,
-  usePendingTransactions
+  usePendingTransactions,
+  useGetBundleByID
 } from 'state/transactions/hooks'
-import { ChainId } from '@alchemistcoin/sdk'
+
 import { useAddPopup } from 'state/application/hooks'
+import { BigNumber } from 'ethers'
 
-export enum Event {
-  GAS_CHANGE = 'GAS_CHANGE',
-  SOCKET_SESSION_RESPONSE = 'SOCKET_SESSION',
-  SOCKET_ERR = 'SOCKET_ERR',
-  TRANSACTION_REQUEST = 'TRANSACTION_REQUEST',
-  TRANSACTION_CANCEL_REQUEST = 'TRANSACTION_CANCEL_REQUEST',
-  TRANSACTION_RESPONSE = 'TRANSACTION_RESPONSE',
-  TRANSACTION_DIAGNOSIS = 'TRANSACTION_DIAGNOSIS',
-  TRANSACTION_STATUS_REQUEST = 'TRANSACTION_STATUS_REQUEST',
-  TRANSACTION_CANCEL_RESPONSE = 'TRANSACTION_CANCEL_RESPONSE'
-}
-
-export enum Status {
-  PENDING_TRANSACTION = 'PENDING_TRANSACTION',
-  FAILED_TRANSACTION = 'FAILED_TRANSACTION',
-  SUCCESSFUL_TRANSACTION = 'SUCCESSFUL_TRANSACTION',
-  CANCEL_TRANSACTION_SUCCESSFUL = 'CANCEL_TRANSACTION_SUCCESSFUL'
+export const STATUS_LOCALES: Record<string, string> = {
+  PENDING_BUNDLE: 'Flashbots working on including your swap',
+  FAILED_BUNDLE: 'Failed',
+  SUCCESSFUL_BUNDLE: 'Success',
+  CANCEL_BUNDLE_SUCCESSFUL: 'Cancelled',
+  BUNDLE_NOT_FOUND: 'Failed'
 }
 
 export enum Diagnosis {
@@ -46,100 +49,46 @@ export enum Diagnosis {
   ERROR_UNKNOWN = 'ERROR_UNKNOWN'
 }
 
+export interface MistXVersion {
+  api: string
+  client: string
+}
+
 export interface SocketSession {
   token: string
-}
-export interface SwapReq {
-  amount0: BigNumberish
-  amount1: BigNumberish
-  path: Array<string>
-  to: string
-  deadline: string | string[]
+  version: MistXVersion | undefined
 }
 
-export interface TransactionReq {
-  chainId: ChainId
-  serializedSwap: string
-  serializedApprove: string | undefined
-  swap: SwapReq
-  bribe: BigNumberish
-  routerAddress: string
-  estimatedEffectiveGasPrice?: number
-  estimatedGas?: number
-  from: string
-  timestamp?: number
-}
-
-export interface TransactionRes {
-  transaction: TransactionProcessed
-  status: Status
-  message: string
-  error: string
-}
-
-export interface TransactionProcessed {
-  serializedSwap: string
-  serializedApprove: string | undefined
-  swap: SwapReq
-  bribe: BigNumberish
-  routerAddress: string
-  estimatedEffectiveGasPrice: number
-  estimatedGas: number
-  timestamp: number // EPOCH
-  sessionToken: string
-  chainId: number
-  simulateOnly: boolean
-  from: string
-}
-
-export interface TransactionDiagnosisRes {
-  transaction: TransactionProcessed
-  blockNumber: number
-  flashbotsResolution: string
-  mistxDiagnosis: Diagnosis
-}
-
-interface QuoteEventsMap {
-  [Event.SOCKET_SESSION_RESPONSE]: (response: SocketSession) => void
-  [Event.SOCKET_ERR]: (err: any) => void
-  [Event.GAS_CHANGE]: (response: Gas) => void
-  [Event.TRANSACTION_REQUEST]: (response: TransactionReq) => void
-  [Event.TRANSACTION_CANCEL_REQUEST]: (response: TransactionReq) => void
-  [Event.TRANSACTION_RESPONSE]: (response: TransactionRes) => void
-  [Event.TRANSACTION_DIAGNOSIS]: (response: TransactionDiagnosisRes) => void
-  [Event.TRANSACTION_STATUS_REQUEST]: (response: TransactionReq) => void
-  [Event.TRANSACTION_CANCEL_RESPONSE]: (response: any) => void
-}
-
-const tokenKey = `SESSION_TOKEN`
-const token = localStorage.getItem(tokenKey)
-const serverUrl = (process.env.REACT_APP_SERVER_URL as string) || 'http://localhost:4000'
-
-const socket: Socket<QuoteEventsMap, QuoteEventsMap> = io(serverUrl, {
-  transports: ['websocket'],
-  auth: { token },
-  reconnection: true,
-  reconnectionDelay: 5000,
-  autoConnect: true
-})
-
-function transactionResToastStatus(transaction: TransactionRes) {
+function bundleResponseToastStatus(bundle: BundleRes | BundleResApi) {
   let pending = false
   let success = false
-  let message = transaction.message
+  let message = bundle.message
+  const processedBundle = bundle.bundle as BundleProcessed
 
-  switch (transaction.status) {
-    case Status.FAILED_TRANSACTION:
+  switch (bundle.status) {
+    case Status.FAILED_BUNDLE:
+      message = 'Transaction failed - No Fee Taken'
       break
-    case Status.PENDING_TRANSACTION:
+    case Status.PENDING_BUNDLE:
       pending = true
       break
-    case Status.SUCCESSFUL_TRANSACTION:
+    case Status.SUCCESSFUL_BUNDLE:
       message = 'Successful Transaction'
+
+      if (processedBundle.backrun.best.count > 0) {
+        message += `. CONGRATULATIONS, you earned ${processedBundle.backrun.best.totalValueETH?.toFixed(
+          3
+        )}ETH ($${Math.floor(processedBundle.backrun.best.totalValueUSD || 0)}) in rewards sent to your wallet!`
+      }
+
       success = true
       break
-    case Status.CANCEL_TRANSACTION_SUCCESSFUL:
+    case Status.CANCEL_BUNDLE_SUCCESSFUL:
+      message = 'Transaction Cancelled - For Free'
       success = true
+      break
+    case Status.BUNDLE_NOT_FOUND:
+      message = 'Transaction failed - No Fee Taken'
       break
     default:
       pending = true
@@ -150,148 +99,203 @@ function transactionResToastStatus(transaction: TransactionRes) {
     pending,
     success,
     message,
-    status: transaction.status
+    status: bundle.status
   }
 }
 
+const getTransactionHashes = (bundle: BundleProcessed): string[] =>
+  bundle.transactions.map((t: TransactionProcessed) => keccak256(t.serialized))
+
+const serverUrl = (process.env.REACT_APP_SERVER_URL as string) || 'http://localhost:4000'
+
+const socket = new MistxSocket(serverUrl)
+
 export default function Sockets(): null {
+  const updateTxReqInterval = useRef<any>(null)
   const dispatch = useDispatch()
   const addPopup = useAddPopup()
   const allTransactions = useAllTransactions()
   const updateTransaction = useTransactionUpdater()
   const removeTransaction = useTransactionRemover()
   const pendingTransactions = usePendingTransactions()
+  const webSocketConnected = useSocketStatus()
+  const getBundleByID = useGetBundleByID()
+  const [newAppVersionAvailable, setNewAppVersionAvailable] = useNewAppVersionAvailable()
 
   useEffect(() => {
-    socket.on('connect', () => {
-      // console.log('websocket connected')
-      dispatch(updateSocketStatus(true))
-    })
+    const disconnect = socket.init({
+      onConnect: () => {
+        // console.log('websocket connected')
+        dispatch(updateSocketStatus(true))
+      },
+      onConnectError: err => {
+        // console.log('websocket connect error', err)
+        dispatch(updateSocketStatus(false))
+      },
+      onDisconnect: err => {
+        // console.log('websocket disconnect', err)
+        dispatch(updateSocketStatus(false))
+      },
+      onError: err => {
+        // console.log('websocket err', err)
+        if (err.event === Event.MISTX_BUNDLE_REQUEST) {
+          const bundleResponse = err.data as BundleRes
+          const hashes = getTransactionHashes(bundleResponse.bundle)
+          const hash: string | undefined = hashes.find((h: string) => !!allTransactions?.[h])
 
-    socket.on('connect_error', err => {
-      // console.log('websocket connect error', err)
-      dispatch(updateSocketStatus(false))
-    })
+          if (!hash) return // TODO: log and handle this error
 
-    socket.on('disconnect', err => {
-      // console.log('websocket disconnect', err)
-      dispatch(updateSocketStatus(false))
-    })
+          if (allTransactions?.[hash]) {
+            removeTransaction({
+              chainId: bundleResponse.bundle.chainId,
+              hash
+            })
+          }
+        }
+      },
+      onSocketSession: session => {
+        const { version } = session
+        // check client version and notify user to refresh page
+        // if the client version is not equal to the version.client
+        // received in the session payload
+        if (!newAppVersionAvailable && version && PJSON && version.client !== PJSON.version) {
+          setNewAppVersionAvailable(true)
+        } else if (newAppVersionAvailable) {
+          setNewAppVersionAvailable(false)
+        }
+      },
+      onFeesChange: (fees: Fees) => {
+        dispatch(updateFees(fees))
+      },
+      onTransactionResponse: response => {
+        const { bundle: b, message, status } = response
 
-    socket.on(Event.SOCKET_ERR, err => {
-      // console.log('websocket err', err)
-      if (err.event === Event.TRANSACTION_REQUEST) {
-        const transactionReq = err.data as TransactionReq
-        const hash = keccak256(transactionReq.serializedSwap)
-        removeTransaction({
-          chainId: transactionReq.chainId,
+        const bundle = b && typeof b === 'string' ? getBundleByID(b)?.processed : (b as BundleProcessed)
+        const hashes = getTransactionHashes(bundle as BundleProcessed)
+        const hash: string | undefined = hashes.find((h: string) => !!allTransactions?.[h])
+
+        if (!hash) return // TODO: handle this if necessary
+
+        const tx = allTransactions?.[hash]
+        const summary = tx?.summary
+        const previouslyCompleted = tx?.status !== Status.PENDING_BUNDLE && tx?.receipt
+
+        if (!bundle || !bundle.chainId) return
+
+        const transactionId = {
+          chainId: bundle.chainId,
           hash
-        })
-      }
-    })
+        }
 
-    socket.on(Event.SOCKET_SESSION_RESPONSE, session => {
-      localStorage.setItem(tokenKey, session.token)
-    })
+        if (status === Status.CANCEL_BUNDLE_SUCCESSFUL && window.fathom) {
+          window.fathom.trackGoal(FATHOM_GOALS.CANCEL_COMPLETE, 0)
+        }
 
-    socket.on(Event.GAS_CHANGE, gas => {
-      dispatch(updateGas(gas))
-    })
-
-    socket.on(Event.TRANSACTION_RESPONSE, transaction => {
-      const hash = keccak256(transaction.transaction.serializedSwap)
-      const tx = allTransactions?.[hash]
-      const summary = tx?.summary
-      const previouslyCompleted = tx?.status !== Status.PENDING_TRANSACTION && tx?.receipt
-
-      const transactionId = {
-        chainId: transaction.transaction.chainId,
-        hash
-      }
-
-      if (!previouslyCompleted) {
-        updateTransaction(transactionId, {
-          transaction: transaction.transaction,
-          message: transaction.message,
-          status: transaction.status,
-          updatedAt: new Date().getTime()
-        })
-
-        addPopup(
-          {
-            txn: {
+        // TO DO - Handle response.status === BUNDLE_NOT_FOUND - ??
+        if (!previouslyCompleted) {
+          updateTransaction(transactionId, {
+            bundle: bundle,
+            message: message,
+            status: status,
+            updatedAt: new Date().getTime()
+          })
+          if (status === Status.SUCCESSFUL_BUNDLE && window.fathom) {
+            window.fathom.trackGoal(FATHOM_GOALS.SWAP_COMPLETE, 0)
+          }
+          if (
+            status === Status.SUCCESSFUL_BUNDLE ||
+            status === Status.FAILED_BUNDLE ||
+            status === Status.CANCEL_BUNDLE_SUCCESSFUL ||
+            status === Status.BUNDLE_NOT_FOUND
+          ) {
+            addPopup(
+              {
+                txn: {
+                  hash,
+                  summary,
+                  ...bundleResponseToastStatus(response)
+                }
+              },
               hash,
-              summary,
-              ...transactionResToastStatus(transaction)
+              60000
+            )
+            const { ethereum } = window
+            const isMetaMask = !!(ethereum && ethereum.isMetaMask)
+            const hideWHardwareWalletWarningModalPerference =
+              localStorage.getItem('hideHardwareWarningModal') === 'true'
+            if (response.error === 'nonce too high' && isMetaMask && !hideWHardwareWalletWarningModalPerference) {
+              dispatch(setOpenModal(ApplicationModal.MMHARDWARE))
             }
-          },
-          hash,
-          60000
-        )
+          }
+        }
       }
     })
-
-    socket.on(Event.TRANSACTION_DIAGNOSIS, diagnosis => {
-      // console.log('- log transaction diagnosis', diagnosis)
-      const hash = keccak256(diagnosis.transaction.serializedSwap)
-
-      const transactionId = {
-        chainId: diagnosis.transaction.chainId,
-        hash
-      }
-
-      updateTransaction(transactionId, {
-        blockNumber: diagnosis.blockNumber,
-        flashbotsResolution: diagnosis.flashbotsResolution,
-        mistxDiagnosis: diagnosis.mistxDiagnosis,
-        updatedAt: new Date().getTime()
-      })
-    })
-
     return () => {
-      socket.off('connect')
-      socket.off('connect_error')
-      socket.off(Event.SOCKET_ERR)
-      socket.off(Event.SOCKET_SESSION_RESPONSE)
-      socket.off(Event.GAS_CHANGE)
-      socket.off(Event.TRANSACTION_RESPONSE)
-      socket.off(Event.TRANSACTION_DIAGNOSIS)
+      disconnect()
     }
-  }, [addPopup, dispatch, allTransactions, removeTransaction, updateTransaction])
+  }, [
+    addPopup,
+    dispatch,
+    allTransactions,
+    getBundleByID,
+    removeTransaction,
+    updateTransaction,
+    newAppVersionAvailable,
+    setNewAppVersionAvailable
+  ])
 
   // Check each pending transaction every x seconds and fetch an update if the time passed since the last update is more than MANUAL_CHECK_TX_STATUS_INTERVAL (seconds)
+  // TO DO - We need chainId and processed.swap.deadline
   useEffect(() => {
-    let interval: any
-    clearInterval(interval)
-
-    if (pendingTransactions) {
-      interval = setInterval(() => {
+    if (updateTxReqInterval.current) clearInterval(updateTxReqInterval.current)
+    if (pendingTransactions && Object.keys(pendingTransactions).length) {
+      updateTxReqInterval.current = setInterval(() => {
+        if (!webSocketConnected) return
         const timeNow = new Date().getTime()
         Object.keys(pendingTransactions).forEach(hash => {
           const tx = pendingTransactions[hash]
-          if (tx.updatedAt) {
+          let isDead = false
+          if (tx.deadline) {
+            const deadline = BigNumber.from(tx.deadline || 1200).toNumber() * 1000
+            if (deadline <= timeNow - MANUAL_CHECK_TX_STATUS_INTERVAL * 1000) isDead = true
+          }
+          if (tx.processed && isDead && tx.chainId) {
+            const transactionId = {
+              chainId: tx.chainId,
+              hash
+            }
+            updateTransaction(transactionId, {
+              bundle: tx.processed,
+              message: 'Transaction Expired',
+              status: Status.FAILED_BUNDLE,
+              updatedAt: timeNow
+            })
+          } else if (tx.updatedAt) {
+            // console.log('CHECK STATUS', tx)
             const secondsSinceLastUpdate = (timeNow - tx.updatedAt) / 1000
             if (secondsSinceLastUpdate > MANUAL_CHECK_TX_STATUS_INTERVAL && tx.processed) {
-              const transactionReq: TransactionProcessed = tx.processed
-              // console.log('- test socket.emit TRANSACTION_STATUS_REQUEST')
-              socket.emit(Event.TRANSACTION_STATUS_REQUEST, transactionReq)
+              // const transactionReq: TransactionProcessed = tx.processed
+              socket.emitStatusRequest(tx.processed.id)
             }
           }
         })
       }, 5000)
     } else {
-      clearInterval(interval)
+      clearInterval(updateTxReqInterval.current)
     }
-    return () => clearInterval(interval)
-  }, [pendingTransactions])
+    return () => {
+      if (updateTxReqInterval.current) clearInterval(updateTxReqInterval.current)
+    }
+  }, [pendingTransactions, updateTransaction, webSocketConnected])
 
   return null
 }
 
-export function emitTransactionRequest(transaction: TransactionReq) {
-  socket.emit(Event.TRANSACTION_REQUEST, transaction)
+export function emitTransactionRequest(bundle: BundleReq) {
+  socket.emitTransactionRequest(bundle)
 }
 
-export function emitTransactionCancellation(transaction: TransactionProcessed) {
-  socket.emit(Event.TRANSACTION_CANCEL_REQUEST, transaction)
+export function emitTransactionCancellation(id: string) {
+  // TO DO any
+  socket.emitTransactionCancellation(id)
 }

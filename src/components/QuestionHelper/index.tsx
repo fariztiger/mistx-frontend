@@ -2,29 +2,30 @@ import React, { useCallback, useState } from 'react'
 import styled from 'styled-components'
 import Tooltip from '../Tooltip'
 import { Info } from '../Icons'
+import { PopoverProps } from '../Popover'
 
-const QuestionWrapper = styled.div`
+const QuestionWrapper = styled.div<{ small?: boolean }>`
   display: flex;
   align-items: center;
   justify-content: center;
-  //padding: 0.2rem;
   border: none;
   background: none;
   outline: none;
   cursor: default;
-  //border-radius: 36px;
-  //background-color: ${({ theme }) => theme.bg5};
   color: ${({ theme }) => theme.text2};
+
+  width: ${({ small }) => (small ? '16px' : '24px')};
+  height: auto;
+  opacity: 0.8;
 
   :hover,
   :focus {
-    opacity: 0.7;
+    opacity: 1;
   }
 
   svg {
-    circle, path {
-      fill: ${({ theme }) => theme.primary2};
-    }
+    width: 100%;
+    height: auto;
   }
 `
 
@@ -32,15 +33,12 @@ const LightQuestionWrapper = styled.div`
   display: flex;
   align-items: center;
   justify-content: center;
-  //padding: 0.2rem;
   border: none;
   background: none;
   outline: none;
   cursor: default;
-  //border-radius: 36px;
   width: 24px;
   height: 24px;
-  //background-color: rgba(255, 255, 255, 0.1);
   color: ${({ theme }) => theme.white};
 
   :hover,
@@ -59,20 +57,40 @@ const QuestionMark = styled.span`
   font-size: 1rem;
 `
 
-export default function QuestionHelper({ text }: { text: string }) {
+const Wrapper = styled.div`
+  align-items: center;
+  display: flex;
+  margin-left: 4px;
+`
+
+const defaultWrapperStyle = {}
+
+export default function QuestionHelper({
+  className,
+  text,
+  placement,
+  small,
+  style
+}: {
+  className?: string
+  text: string
+  placement?: PopoverProps['placement']
+  small?: boolean
+  style?: any
+}) {
   const [show, setShow] = useState<boolean>(false)
 
   const open = useCallback(() => setShow(true), [setShow])
   const close = useCallback(() => setShow(false), [setShow])
 
   return (
-    <span style={{ display: 'flex', alignItems: 'center', marginLeft: 4 }}>
-      <Tooltip text={text} show={show}>
-        <QuestionWrapper onClick={open} onMouseEnter={open} onMouseLeave={close}>
+    <Wrapper className={className} style={style || defaultWrapperStyle}>
+      <Tooltip text={text} show={show} placement={placement}>
+        <QuestionWrapper onClick={open} onMouseEnter={open} onMouseLeave={close} small={small}>
           <Info />
         </QuestionWrapper>
       </Tooltip>
-    </span>
+    </Wrapper>
   )
 }
 

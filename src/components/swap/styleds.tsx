@@ -4,6 +4,7 @@ import { AlertTriangle } from 'react-feather'
 import styled, { css } from 'styled-components'
 import { Text } from 'rebass'
 import { AutoColumn } from '../Column'
+import { RowBetween } from '../Row'
 
 export const Wrapper = styled.div`
   padding: 1rem;
@@ -21,7 +22,6 @@ export const ArrowWrapper = styled.div<{
   color?: string
   clickable: boolean
 }>`
-  align-items: center;
   border-radius: 50%;
   background: #2a3645;
   height: 2.5rem;
@@ -65,6 +65,8 @@ export const SectionBreak = styled.div`
 export const BottomGrouping = styled.div`
   margin: 1rem 0 0 0;
   padding: 0;
+  z-index: 1;
+  position: relative;
 `
 
 export const ErrorText = styled(Text)<{ severity?: 0 | 1 | 2 | 3 | 4 }>`
@@ -205,29 +207,18 @@ export const TokenHandImage = styled.img`
 `
 
 export const FeeWrapper = styled.div`
-  height: 2.5rem;
-  font-size: 0.875rem;
-  padding: 0 1.25rem;
-  width: 100%;
-  display: flex;
-  flex-direction: row;
-  border-radius: 1.25rem;
-  background-color: ${({ theme }) => theme.bg5};
-  line-height: 2.5rem;
   color: ${({ theme }) => theme.text3};
-  span {
-    color: ${({ theme }) => theme.white};
-  }
+  display: flex;
+  font-size: 0.875rem;
+  line-height: 2.5rem;
+  padding: 0 0.25rem;
+  width: 100%;
 `
 
 export const FeeInnerLeft = styled.div`
   width: 100%;
   text-align: left;
   color: ${({ theme }) => theme.text3};
-  span {
-    padding-left: 0.25rem;
-    color: ${({ theme }) => theme.white};
-  }
 `
 
 export const FeeInnerRight = styled.div`
@@ -235,7 +226,42 @@ export const FeeInnerRight = styled.div`
   text-align: right;
   color: ${({ theme }) => theme.white};
   display: flex;
-  justify-content: space-around;
+  justify-content: flex-start;
   position: relative;
   margin-top: -2px;
+
+  > div {
+    display: flex;
+  }
+`
+
+export const FeeRowBetween = styled(RowBetween)`
+  position: relative;
+  align-items: flex-start;
+
+  &:after {
+    content: '';
+    height: 13px;
+    width: 1px;
+    position: absolute;
+    left: 8px;
+    top: 0px;
+    background-color: ${({ theme }) => theme.text2};
+  }
+  &:before {
+    content: '';
+    height: 1px;
+    width: 8px;
+    position: absolute;
+    left: 8px;
+    top: 12px;
+    background-color: ${({ theme }) => theme.text2};
+  }
+`
+
+export const Divider = styled.div`
+  width: 100%;
+  height: 1px;
+  background-color: ${({ theme }) => theme.text3};
+  margin: 10px 0;
 `

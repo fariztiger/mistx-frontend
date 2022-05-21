@@ -1,6 +1,6 @@
-import { ChainId, Exchange, JSBI, Percent, Token, WETH } from '@alchemistcoin/sdk'
+import { ChainId, Exchange, JSBI, Percent, Token, WETH } from '@alchemist-coin/mistx-core'
 import { AbstractConnector } from '@web3-react/abstract-connector'
-import { injected } from '../connectors'
+import { injected, ledger } from '../connectors'
 
 export const MISTX_ROUTER_ADDRESS: { [chainId in ChainId]?: { [exchange in Exchange]?: string } } = {
   [ChainId.MAINNET]: {
@@ -138,6 +138,13 @@ export const PINNED_PAIRS: { readonly [chainId in ChainId]?: [Token, Token][] } 
   ]
 }
 
+export const EIP_1559_ACTIVATION_BLOCK: { [chainId in ChainId]?: number } = {
+  [ChainId.ROPSTEN]: 10499401,
+  [ChainId.GÖRLI]: 5062605,
+  [ChainId.RINKEBY]: 8897988,
+  [ChainId.MAINNET]: 12965000
+}
+
 export interface WalletInfo {
   connector?: AbstractConnector
   name: string
@@ -160,6 +167,14 @@ export const SUPPORTED_WALLETS: { [key: string]: WalletInfo } = {
   //   color: '#010101',
   //   primary: true
   // },
+  LEDGER: {
+    connector: ledger,
+    name: 'Ledger',
+    iconName: 'ledger-logo.png',
+    description: 'Hardware Wallet',
+    href: null,
+    color: '#000'
+  },
   METAMASK: {
     connector: injected,
     name: 'MetaMask',
@@ -217,9 +232,9 @@ export const SUPPORTED_WALLETS: { [key: string]: WalletInfo } = {
 export const NetworkContextName = 'NETWORK'
 
 // default allowed slippage, in bips
-export const INITIAL_ALLOWED_SLIPPAGE = 50
-// 20 minutes, denominated in seconds
-export const DEFAULT_DEADLINE_FROM_NOW = 60 * 20
+export const INITIAL_ALLOWED_SLIPPAGE = 500
+// 3 minutes, denominated in seconds
+export const DEFAULT_DEADLINE_FROM_NOW = 60 * 3
 // default min trade margin, in bips
 export const MIN_TRADE_MARGIN = 1
 
@@ -240,7 +255,7 @@ export const PRICE_IMPACT_WITHOUT_FEE_CONFIRM_MIN: Percent = new Percent(JSBI.Bi
 // for non expert mode disable swaps above this
 export const BLOCKED_PRICE_IMPACT_NON_EXPERT: Percent = new Percent(JSBI.BigInt(1500), BIPS_BASE) // 15%
 
-// used to ensure the user doesn't send so much ETH so they end up with <.01
+// used to ensure the user doesn't send so much ETH so they end up with <.010
 export const MIN_ETH: JSBI = JSBI.exponentiate(JSBI.BigInt(10), JSBI.BigInt(16)) // .00 ETH
 export const BETTER_TRADE_LESS_HOPS_THRESHOLD = new Percent(JSBI.BigInt(50), JSBI.BigInt(10000))
 
@@ -256,11 +271,17 @@ export const BLOCKED_ADDRESSES: string[] = [
   '0x8576aCC5C05D6Ce88f4e49bf65BdF0C62F91353C'
 ]
 
-// Miner Bribe Margin
+// Miner Tip Margin
 // default bribe margin, in bips
-export const INITIAL_BRIBE_MARGIN = 128
-export const MINER_BRIBE_MIN = 80
-export const MINER_BRIBE_MAX = 225
+export const INITIAL_BRIBE_MARGIN = 40
+export const MINER_BRIBE_MIN = 20
+export const MINER_BRIBE_MAX = 80
+
+export const MISTX_DEFAULT_GAS_LIMIT = 375000
+export const MISTX_DEFAULT_APPROVE_GAS_LIMIT = 55000
+
+// Base fee, future block to calculate
+export const MAX_BASE_FEE_BLOCKS_IN_FUTURE = 5
 
 // The interval for manual transaction status checks are emitted if no update has been received for x seconds
 export const MANUAL_CHECK_TX_STATUS_INTERVAL = 30 // seconds

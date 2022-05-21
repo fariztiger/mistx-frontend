@@ -1,11 +1,14 @@
 import React, { useContext, useRef, useState } from 'react'
 import { X } from 'react-feather'
-import ReactGA from 'react-ga'
 import { Text } from 'rebass'
-import { lighten, rem } from 'polished'
+import { useDispatch } from 'react-redux'
+import { lighten, rem, darken } from 'polished'
 import styled, { ThemeContext } from 'styled-components'
 import { useOnClickOutside } from '../../hooks/useOnClickOutside'
 import { ApplicationModal } from '../../state/application/actions'
+import { updateFeeDisplayCurrency } from '../../state/user/actions'
+import { useUserBribeMargin } from '../../state/user/hooks'
+import { TipSettingsSteps, tipSettingToValue, tipValueToSetting } from '../../state/user/reducer'
 import { useModalOpen, useToggleSettingsMenu } from '../../state/application/hooks'
 import {
   useExpertModeManager,
@@ -15,7 +18,7 @@ import {
 } from '../../state/user/hooks'
 import { TYPE } from '../../theme'
 // components
-import { SettingsHeader } from '../shared/header/styled'
+import { SettingsHeader, SettingsHeaderEnd } from '../shared/header/styled'
 import { ButtonError } from '../Button'
 import { AutoColumn } from '../Column'
 import Modal from '../Modal'
@@ -25,6 +28,8 @@ import Toggle from '../Toggle'
 import MinerBribeSlider from './MinerBribeSlider'
 import TransactionSettings from '../TransactionSettings'
 import { Cog, Close } from '../Icons'
+import useFeeDisplayCurrency from '../../hooks/useFeeDisplayCurrency'
+import FATHOM_GOALS from '../../constants/fathom'
 
 const StyledCloseIcon = styled(X)`
   height: 20px;
@@ -33,16 +38,12 @@ const StyledCloseIcon = styled(X)`
   :hover {
     cursor: pointer;
   }
-
-  > * {
-    stroke: ${({ theme }) => theme.text1};
-  }
 `
 
 const StyledMenuButton = styled.button`
   align-items: center;
   position: relative;
-  border: 2px solid ${({ theme }) => theme.primary2};
+  border: 1px solid ${({ theme }) => theme.primary2};
   background-color: transparent;
   display: flex;
   justify-content: center;
@@ -56,7 +57,7 @@ const StyledMenuButton = styled.button`
   :focus {
     cursor: pointer;
     outline: none;
-    border: 2px solid ${({ theme }) => lighten(0.1, theme.primary2)};
+    border: 1px solid ${({ theme }) => lighten(0.1, theme.primary2)};
   }
 `
 
@@ -69,9 +70,6 @@ const StyledMenuIcon = styled.div`
     width: ${rem(24)};
     height: ${rem(24)};
 
-    > * {
-      stroke: ${({ theme }) => theme.primary2};
-    }
     path {
       fill: ${({ theme }) => theme.primary2};
     }
@@ -115,6 +113,16 @@ const MenuFlyout = styled.span`
     left: 0;
     min-width: auto;
   `};
+
+  ${({ theme }) => theme.mediaWidth.upToSmall`
+    left: 0;
+    max-height: 110%;
+    min-width: auto;
+    overflow-x: hidden;
+    overflow-y: auto;
+    right: 0;
+    top: 52px;
+  `};
 `
 
 const Break = styled.div`
@@ -134,36 +142,193 @@ const ModalContentWrapper = styled.div`
 const SettingWrapper = styled.div<{ darkBg?: boolean }>`
   padding: 1.5rem 1.5rem;
   background-color: ${({ theme, darkBg }) => darkBg && '#232E3B'};
+
+  ${({ theme }) => theme.mediaWidth.upToSmall`
+    padding: 1.5rem 1rem;
+  `}
 `
 
 const StyledRowFixed = styled(RowFixed)`
   width: 100%;
 `
 
-export default function SettingsTab() {
-  const node = useRef<HTMLDivElement>()
-  const open = useModalOpen(ApplicationModal.SETTINGS)
-  const toggle = useToggleSettingsMenu()
+const ToggleButton = styled.button<{ active: boolean }>`
+  color: ${({ theme }) => theme.text1};
+  align-items: center;
+  height: 2rem;
+  border-radius: 8px;
+  font-size: 1rem;
+  width: auto;
+  min-width: 3.5rem;
+  border: 1px solid ${({ theme }) => theme.primary2};
+  outline: none;
+  background: transparent;
+  font-weight: 600;
+  background: transparent;
+  cursor: pointer;
+  color: ${({ theme }) => theme.text1};
 
+  ${({ active, theme }) =>
+    active &&
+    `
+      background: ${theme.primary2};
+      color: ${theme.text5};
+  `}
+
+  &:first-child {
+    border-top-right-radius: 0;
+    border-bottom-right-radius: 0;
+    border-right: 0;
+  }
+
+  &:last-child {
+    border-top-left-radius: 0;
+    border-bottom-left-radius: 0;
+  }
+
+  :hover {
+    border-color: solid ${({ theme }) => darken(0.1, theme.primary2)};
+  }
+  :focus {
+    background: ${({ theme }) => darken(0.1, theme.primary2)};
+  }
+`
+
+function SettingsMenu({ toggle }: { toggle: () => void }) {
+  const dispatch = useDispatch()
+  const node = useRef<HTMLDivElement>()
+  const [userBribeMargin, setUserBribeMargin] = useUserBribeMargin()
+  const [stateBribeMargin, setStateBribeMargin] = useState<number>(userBribeMargin)
   const theme = useContext(ThemeContext)
   const [userSlippageTolerance, setUserslippageTolerance] = useUserSlippageTolerance()
+  const [stateUserSlippage, setStateUserSlippage] = useState<number>(userSlippageTolerance)
+  const [singleHopOnly, setSingleHopOnly] = useUserSingleHopOnly()
+  const [stateSingleHopOnly, setStateSingleHopOnly] = useState<boolean>(singleHopOnly)
 
+  const onTipChange = (setting: number) => {
+    setStateBribeMargin(tipSettingToValue(setting))
+  }
   const [ttl, setTtl] = useUserTransactionTTL()
 
+  const saveState = () => {
+    setUserBribeMargin(stateBribeMargin, userBribeMargin)
+    setUserslippageTolerance(stateUserSlippage, userSlippageTolerance)
+    setSingleHopOnly(stateSingleHopOnly)
+  }
+
+  const handleToggle = () => {
+    saveState()
+    toggle()
+  }
+
+  useOnClickOutside(node, handleToggle)
+
+  const feeDisplayCurrency = useFeeDisplayCurrency()
+
+  return (
+    <MenuFlyout ref={node as any}>
+      <AutoColumn gap="md">
+        <SettingWrapper>
+          <StyledRowFixed>
+            <SettingsHeader>
+              <Text fontWeight={600} fontSize={20}>
+                MistX Protection
+                <QuestionHelper text="Represents a fee sent to the miner to include your transaction privately and a fee sent to Alchemist for providing mistX protection services. Higher tips are more likely to be accepted." />
+              </Text>
+              <SettingsHeaderEnd>
+                <ToggleButton
+                  onClick={() => dispatch(updateFeeDisplayCurrency('USD'))}
+                  active={feeDisplayCurrency === 'USD'}
+                >
+                  USD
+                </ToggleButton>
+                <ToggleButton
+                  onClick={() => dispatch(updateFeeDisplayCurrency('ETH'))}
+                  active={feeDisplayCurrency === 'ETH'}
+                >
+                  ETH
+                </ToggleButton>
+              </SettingsHeaderEnd>
+            </SettingsHeader>
+          </StyledRowFixed>
+          <MinerBribeSlider
+            value={tipValueToSetting(stateBribeMargin)}
+            steps={TipSettingsSteps}
+            onChange={onTipChange}
+          />
+        </SettingWrapper>
+        <SettingWrapper darkBg>
+          <SettingsHeader>
+            <Text fontWeight={600} fontSize={20}>
+              Transaction Settings
+            </Text>
+          </SettingsHeader>
+          <TransactionSettings
+            rawSlippage={stateUserSlippage}
+            setRawSlippage={setStateUserSlippage}
+            deadline={ttl}
+            setDeadline={setTtl}
+          />
+        </SettingWrapper>
+        <SettingWrapper>
+          <SettingsHeader>
+            <Text fontWeight={600} fontSize={20}>
+              Interface Settings
+            </Text>
+          </SettingsHeader>
+          <RowBetween flexDirection="column">
+            <StyledRowFixed>
+              <TYPE.black fontWeight={400} fontSize={16} color={theme.text1}>
+                DISABLE MULTIHOPS
+              </TYPE.black>
+              <QuestionHelper text="Restricts swaps to direct pairs only." />
+            </StyledRowFixed>
+            <StyledRowFixed marginTop="0.5rem">
+              <Toggle
+                id="toggle-disable-multihop-button"
+                isActive={stateSingleHopOnly}
+                toggle={() => {
+                  // TODO: replace will alternative tracking
+                  // ReactGA.event({
+                  //   category: 'Routing',
+                  //   action: singleHopOnly ? 'disable single hop' : 'enable single hop'
+                  // })
+                  setStateSingleHopOnly(!stateSingleHopOnly)
+                }}
+              />
+            </StyledRowFixed>
+          </RowBetween>
+        </SettingWrapper>
+      </AutoColumn>
+    </MenuFlyout>
+  )
+}
+
+export default function Settings() {
+  const open = useModalOpen(ApplicationModal.SETTINGS)
+  const toggle = useToggleSettingsMenu()
   const [expertMode, toggleExpertMode] = useExpertModeManager()
-
-  const [singleHopOnly, setSingleHopOnly] = useUserSingleHopOnly()
-
   // show confirmation view before turning on
   const [showConfirmation, setShowConfirmation] = useState(false)
 
-  useOnClickOutside(node, open ? toggle : undefined)
+  const handleDismiss = () => {
+    setShowConfirmation(false)
+  }
+
+  const handleMenuButton = () => {
+    if (!open) {
+      toggle()
+      if (window.fathom) {
+        window.fathom.trackGoal(FATHOM_GOALS.SETTINGS_OPENED, 0)
+      }
+    }
+  }
 
   // https://github.com/DefinitelyTyped/DefinitelyTyped/issues/30451
   return (
     <>
       <StyledMenu>
-        <Modal isOpen={showConfirmation} onDismiss={() => setShowConfirmation(false)} maxHeight={100}>
+        <Modal isOpen={showConfirmation} onDismiss={handleDismiss} maxHeight={100}>
           <ModalContentWrapper>
             <AutoColumn gap="lg">
               <RowBetween style={{ padding: '0 2rem' }}>
@@ -199,7 +364,7 @@ export default function SettingsTab() {
             </AutoColumn>
           </ModalContentWrapper>
         </Modal>
-        <StyledMenuButton onClick={toggle} id="open-settings-dialog-button">
+        <StyledMenuButton onClick={handleMenuButton} id="open-settings-dialog-button">
           <StyledMenuIcon>{open ? <Close /> : <Cog />}</StyledMenuIcon>
           {expertMode ? (
             <EmojiWrapper>
@@ -210,64 +375,7 @@ export default function SettingsTab() {
           ) : null}
         </StyledMenuButton>
       </StyledMenu>
-      {open && (
-        <MenuFlyout ref={node as any}>
-          <AutoColumn gap="md">
-            <SettingWrapper>
-              <StyledRowFixed>
-                <SettingsHeader>
-                  <Text fontWeight={600} fontSize={20}>
-                    Transaction Fee (ETH)
-                  </Text>
-                  <QuestionHelper text="A tip for the miner to accept the transaction. Higher tips are more likely to be accepted." />
-                </SettingsHeader>
-              </StyledRowFixed>
-              <MinerBribeSlider />
-            </SettingWrapper>
-            <SettingWrapper darkBg>
-              <SettingsHeader>
-                <Text fontWeight={600} fontSize={20}>
-                  Transaction Settings
-                </Text>
-              </SettingsHeader>
-              <TransactionSettings
-                rawSlippage={userSlippageTolerance}
-                setRawSlippage={setUserslippageTolerance}
-                deadline={ttl}
-                setDeadline={setTtl}
-              />
-            </SettingWrapper>
-            <SettingWrapper>
-              <SettingsHeader>
-                <Text fontWeight={600} fontSize={20}>
-                  Interface Settings
-                </Text>
-              </SettingsHeader>
-              <RowBetween flexDirection="column">
-                <StyledRowFixed>
-                  <TYPE.black fontWeight={400} fontSize={16} color={theme.text1}>
-                    DISABLE MULTIHOPS
-                  </TYPE.black>
-                  <QuestionHelper text="Restricts swaps to direct pairs only." />
-                </StyledRowFixed>
-                <StyledRowFixed marginTop="0.5rem">
-                  <Toggle
-                    id="toggle-disable-multihop-button"
-                    isActive={singleHopOnly}
-                    toggle={() => {
-                      ReactGA.event({
-                        category: 'Routing',
-                        action: singleHopOnly ? 'disable single hop' : 'enable single hop'
-                      })
-                      setSingleHopOnly(!singleHopOnly)
-                    }}
-                  />
-                </StyledRowFixed>
-              </RowBetween>
-            </SettingWrapper>
-          </AutoColumn>
-        </MenuFlyout>
-      )}
+      {open && <SettingsMenu toggle={toggle} />}
     </>
   )
 }

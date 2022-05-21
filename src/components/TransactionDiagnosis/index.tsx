@@ -2,14 +2,14 @@ import React, { useState } from 'react'
 import dayjs from 'dayjs'
 import styled from 'styled-components'
 import { usePendingTransactions, useTransactionCanceller } from 'state/transactions/hooks'
-import { AmountDetails, TransactionDetails } from 'state/transactions/reducer'
+import { AmountDetails } from 'state/transactions/reducer'
 import { ButtonOutlined } from 'components/Button'
 import { useActiveWeb3React } from 'hooks'
 // import { ArrowDown } from 'react-feather'
 import CurrencyLogo from 'components/CurrencyLogo'
 import { PendingTransactionIcon } from 'components/Icons'
 import { TYPE } from 'theme'
-import { ETHER, Token } from '@alchemistcoin/sdk'
+import { Ether, Token } from '@alchemist-coin/mistx-core'
 import { SettingsHeader } from 'components/shared/header/styled'
 
 const Wrapper = styled.div``
@@ -52,10 +52,11 @@ const CurrencyName = styled.div`
   margin-left: 1rem;
 `
 
-const TransactionAmount = styled.div`
-  font-size: 32px;
+const TransactionAmount = styled.div<{ size?: number }>`
+  font-size: ${({ size = 32 }) => `${size}px`};
   font-weight: 700;
   line-height: 44px;
+  padding-left: 1rem;
   text-align: right;
 `
 
@@ -120,7 +121,7 @@ const CurrencyLabel = ({ amount }: { amount: AmountDetails }) => {
         currency={
           amount.currency.address && amount.currency.chainId
             ? new Token(amount.currency.chainId, amount.currency.address, amount.currency.decimals)
-            : ETHER
+            : Ether.onChain(1) // chainId 1 ok since this is only for display purposes
         }
         size="24px"
       />
@@ -129,22 +130,27 @@ const CurrencyLabel = ({ amount }: { amount: AmountDetails }) => {
   )
 }
 
+const CancelConfirmationModal = React.lazy(() => import('components/CancelConfirmationModal'))
+
 export default function TransactionDiagnosis() {
   const pendingTransactions = usePendingTransactions()
   const { chainId } = useActiveWeb3React()
   const cancelTransaction = useTransactionCanceller()
   const hash = Object.keys(pendingTransactions)[0]
   const tx = pendingTransactions[hash]
-  // const path = tx.processed?.swap.path;
   const tokenInput = tx?.inputAmount
   const tokenOutput = tx?.outputAmount
 
   const canCancel = typeof tx?.status !== 'undefined'
+  const [cancelIntent, setCancelIntent] = useState(false)
   const [cancelClicked, setCancelClicked] = useState(false)
-
   // console.log('tokens', tx, tokenInput, tokenOutput, pendingTransactions)
 
-  function handleCancelClick(hash: string, tx: TransactionDetails) {
+  function handleCancelIntent() {
+    setCancelIntent(true)
+  }
+
+  function handleCancelClick() {
     if (!chainId) return
     if (!tx?.processed) return
     setCancelClicked(true)
@@ -154,13 +160,18 @@ export default function TransactionDiagnosis() {
         hash
       },
       {
-        transaction: tx.processed
+        bundle: tx.processed
       }
     )
   }
 
   return (
     <Wrapper>
+      <CancelConfirmationModal
+        isOpen={cancelIntent}
+        onClose={() => setCancelIntent(false)}
+        onSubmit={handleCancelClick}
+      />
       <StyledDiagnosticWrapper>
         <UpdatesHeader>
           <TYPE.black display="block" fontWeight="700" mb=".625rem">
@@ -188,14 +199,22 @@ export default function TransactionDiagnosis() {
               </TokenAmountWrapper>
               <PendingTransactionIcon />
               <TokenAmountWrapper>
-                <TransactionAmount>{tokenInput?.value}</TransactionAmount>
-                <TransactionAmount>{tokenOutput?.value}</TransactionAmount>
+                {tokenInput && (
+                  <TransactionAmount size={tokenInput.value?.length >= 8 ? 24 : 32}>
+                    {tokenInput.value}
+                  </TransactionAmount>
+                )}
+                {tokenOutput && (
+                  <TransactionAmount size={tokenOutput.value?.length >= 8 ? 24 : 32}>
+                    {tokenOutput.value}
+                  </TransactionAmount>
+                )}
               </TokenAmountWrapper>
             </>
           )}
         </TokenWrapper>
         {canCancel && (
-          <StyledCancelButton disabled={cancelClicked} onClick={() => handleCancelClick(hash, tx)}>
+          <StyledCancelButton disabled={cancelClicked} onClick={handleCancelIntent}>
             {cancelClicked ? 'Cancellation Pending' : 'Cancel Transaction'}
           </StyledCancelButton>
         )}
